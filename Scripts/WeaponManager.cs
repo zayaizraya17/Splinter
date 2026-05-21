@@ -279,7 +279,7 @@ public class WeaponManager : MonoBehaviour
     {
         if (databaseManager != null && databaseManager.IsLoggedIn)
         {
-            databaseManager.UpdateDamageStatistics(databaseManager.CurrentUser.Id, damage);
+                       databaseManager.UpdateDamageStatistics(databaseManager.CurrentUser.Id, (float)damage);
         }
     }
 
