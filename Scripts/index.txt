@@ -1,0 +1,28 @@
+﻿===========================================
+СТРУКТУРА ПРОЕКТА
+===========================================
+
+/Assets
+  /Scripts          - Исходный код (C#)
+    /Core           - Основные системы
+    /Database       - Работа с JSON/БД
+    /UI             - Интерфейс
+    /Player         - Контроллер игрока
+    /Enemies        - ИИ врагов
+    /Weapons        - Оружие
+  /Scenes           - Сцены Unity
+  /Prefabs          - Префабы
+  /Materials        - Материалы
+  /Textures         - Текстуры
+  /StreamingAssets  - Внешние данные
+
+/Database           - База данных (JSON файлы)
+  users.json        - Пользователи
+  saves.json        - Сохранения игр
+  statistics.json   - Статистика
+
+/Exports            - Экспортированные файлы
+  statistics.csv    - Статистика в Excel
+
+readme.txt          - Информация о проекте
+index.txt           - Структура проекта
