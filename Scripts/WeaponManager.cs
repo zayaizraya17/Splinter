@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class WeaponManager : MonoBehaviour
 {
@@ -279,7 +279,11 @@ public class WeaponManager : MonoBehaviour
     {
         if (databaseManager != null && databaseManager.IsLoggedIn)
         {
+
+            databaseManager.UpdateDamageStatistics(databaseManager.CurrentUser.Id, (float)damage);
+
                        databaseManager.UpdateDamageStatistics(databaseManager.CurrentUser.Id, (float)damage);
+
         }
     }
 
