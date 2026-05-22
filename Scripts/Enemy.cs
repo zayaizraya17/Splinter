@@ -23,9 +23,13 @@ public class Enemy : MonoBehaviour
     private Transform player;
     private bool isDead = false;
     private bool isChasing = false;
+    private bool isFleeing = false;
     private Vector3 lastKnownPosition;
     private float detectionRange = 10f;
     private float attackRange = 2f;
+    private float fleeSpeed = 3f;
+    private float fleeDuration = 5f;
+    private float fleeStartTime = 0f;
 
     // === ДОБАВЛЕНО: Ссылка на базу данных ===
     private JsonDatabaseManager databaseManager;
@@ -62,28 +66,101 @@ public class Enemy : MonoBehaviour
 
         if (isDead) return;
 
+        if (isFleeing)
+        {
+            FleeFromPlayer();
+
+            // Проверяем, закончилось ли время убегания
+            if (Time.time - fleeStartTime >= fleeDuration)
+            {
+                isFleeing = false;
+                Debug.Log("Сущность перестала убегать");
+            }
+            return;
+        }
         if (player != null)
         {
             float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
+            // Проверка видимости игрока (стены блокируют обзор)
+            bool canSeePlayer = CheckLineOfSight(player.position);
             if (entityType == EntityType.Aggressive)
             {
-                if (distanceToPlayer <= detectionRange)
+                if (canSeePlayer && distanceToPlayer <= detectionRange)
                 {
+                    lastKnownPosition = player.position;
+                    isChasing = true;
                     ChasePlayer();
                 }
             }
+            else if (isChasing)
+            {
+                // Игрок потерян, идём к последней известной позиции
+                MoveToLastKnownPosition();
+            }
             else if (entityType == EntityType.Neutral && isChasing)
             {
-                if (distanceToPlayer <= detectionRange)
+                if (canSeePlayer && distanceToPlayer <= detectionRange)
                 {
                     ChasePlayer();
+                }
+                else if (isChasing)
+                {
+                    // Идём к последней известной позиции
+                    MoveToLastKnownPosition();
                 }
                 else
                 {
                     isChasing = false;
                 }
             }
+        }
+    }
+
+
+    bool CheckLineOfSight(Vector3 targetPosition)
+    {
+        // Проверяем, есть ли прямая видимость до цели
+        RaycastHit hit;
+        Vector3 direction = (targetPosition - transform.position).normalized;
+        float distance = Vector3.Distance(transform.position, targetPosition);
+
+        if (Physics.Raycast(transform.position, direction, out hit, distance))
+        {
+            // Если попали во что-то кроме игрока - линия обзора заблокирована
+            if (hit.transform != player)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void MoveToLastKnownPosition()
+    {
+        float distanceToLastPos = Vector3.Distance(transform.position, lastKnownPosition);
+
+        if (distanceToLastPos > 1f)
+        {
+            // Двигаемся к последней известной позиции
+            Vector3 direction = (lastKnownPosition - transform.position).normalized;
+            direction.y = 0;
+
+            // Проверяем, нет ли стены на пути
+            Vector3 movePosition = transform.position + direction * speed * Time.deltaTime;
+            if (!Physics.CheckSphere(movePosition, 0.5f))
+            {
+                transform.position = movePosition;
+            }
+            // Поворачиваемся в направлении движения
+            Vector3 lookPos = new Vector3(lastKnownPosition.x, transform.position.y, lastKnownPosition.z);
+            transform.LookAt(lookPos);
+        }
+        else
+        {
+            // Достигли последней известной позиции, прекращаем преследование
+            isChasing = false;
+            Debug.Log("Враг потерял игрока и вернулся в патрулирование");
         }
     }
 
@@ -135,7 +212,12 @@ public class Enemy : MonoBehaviour
             Vector3 direction = (player.position - transform.position).normalized;
             direction.y = 0; // Не двигаемся по Y
 
-            transform.position += direction * speed * Time.deltaTime;
+            // Проверяем, нет ли стены на пути
+            Vector3 movePosition = transform.position + direction * speed * Time.deltaTime;
+            if (!Physics.CheckSphere(movePosition, 0.5f))
+            {
+                transform.position = movePosition;
+            }
 
             // Поворачиваемся к игроку
             Vector3 lookPos = new Vector3(player.position.x, transform.position.y, player.position.z);
@@ -211,6 +293,36 @@ public class Enemy : MonoBehaviour
         }
 
         Destroy(gameObject, 2f);
+    }
+
+
+    public void StartFleeing()
+    {
+        if (entityType != EntityType.Peaceful) return;
+
+        isFleeing = true;
+        fleeStartTime = Time.time;
+        Debug.Log("Мирная сущность начинает убегать!");
+    }
+
+    void FleeFromPlayer()
+    {
+        if (player == null) return;
+
+        // Направляемся в противоположную сторону от игрока
+        Vector3 fleeDirection = (transform.position - player.position).normalized;
+        fleeDirection.y = 0;
+        Vector3 movePosition = transform.position + fleeDirection * fleeSpeed * Time.deltaTime;
+        if (!Physics.CheckSphere(movePosition, 0.5f))
+        {
+            transform.position = movePosition;
+        }
+        // Поворачиваемся в направлении убегания
+        Vector3 lookPos = transform.position + fleeDirection;
+        lookPos.y = transform.position.y;
+        transform.LookAt(lookPos);
+
+        Debug.Log("Сущность убегает от игрока!");
     }
 
     // Визуализация в редакторе

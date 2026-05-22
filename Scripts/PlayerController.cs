@@ -15,7 +15,7 @@ public class PlayerController : MonoBehaviour
     public float maxStamina = 100f;
     public float staminaCostRun = 5f; // 5 ед в секунду (50 за 10 сек)
     public float staminaCostJump = 5f;
-    public float staminaRegen = 10f;  // Скорость восстановления
+    public float staminaRegen = 1f;  // Скорость восстановления
     public float currentStamina;
 
     [Header("Настройки Здоровья")]
@@ -26,6 +26,13 @@ public class PlayerController : MonoBehaviour
     [Header("Компоненты")]
     public Transform cameraTransform; // Сюда перетащи камеру
     public float mouseSensitivity = 2f;
+
+
+    [Header("Атака рукой")]
+    public float handDamage = 5f;
+    public float handRange = 2.5f;
+    public float handAttackCooldown = 0.5f;
+    private float handNextAttackTime = 0f;
 
     // Внутренние переменные
     private CharacterController controller;
@@ -109,7 +116,7 @@ public class PlayerController : MonoBehaviour
         }
         else if (currentStamina < maxStamina)
         {
-            // Восстановление, если не бежим
+            // Восстановление, если не бежим (1 ед в сек)
             currentStamina += staminaRegen * Time.deltaTime;
         }
         // Ограничиваем значения стамины от 0 до Max
@@ -131,11 +138,17 @@ public class PlayerController : MonoBehaviour
         controller.Move(velocity * Time.deltaTime);
 
         // 7. Вращение игрока (Мышь)
-        // В DOOM нельзя смотреть вверх/вниз, только поворачиваться телом
+        //  нельзя смотреть вверх/вниз, только поворачиваться телом
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
 
         // Поворачиваем только тело игрока по Y (влево-вправо)
         transform.Rotate(0, mouseX, 0);
+
+        // 8. Атака рукой (Правая кнопка мыши)
+        if (Input.GetMouseButtonDown(1))
+        {
+            HandAttack();
+        }
 
         // Если захочешь добавить небольшой наклон камеры вверх/вниз, раскомментируй ниже:
         /*
@@ -144,6 +157,47 @@ public class PlayerController : MonoBehaviour
         rotationY = Mathf.Clamp(rotationY, -30f, 30f); // Ограничение угла
         cameraTransform.localRotation = Quaternion.Euler(rotationY, 0, 0);
         */
+    }
+
+    void HandAttack()
+    {
+        // Проверка кулдауна
+        if (Time.time < handNextAttackTime)
+        {
+            return;
+        }
+
+        Debug.Log("Игрок атакует рукой!");
+
+        // Проверяем попадание в радиусе атаки рукой
+        RaycastHit hit;
+        Vector3 direction = transform.forward;
+
+        if (Physics.Raycast(transform.position, direction, out hit, handRange))
+        {
+            Debug.Log($"Атака рукой попала в: {hit.transform.name}");
+
+            Enemy enemy = hit.transform.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                // Наносим урон врагу
+                enemy.TakeDamage(handDamage, gameObject);
+                Debug.Log($"Враг получил {handDamage} урона от руки!");
+
+                // Если мирная сущность - заставляем убегать
+                if (enemy.entityType == Enemy.EntityType.Peaceful)
+                {
+                    enemy.StartFleeing();
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("Атака рукой промахнулась!");
+        }
+
+        // Обновляем время следующей атаки
+        handNextAttackTime = Time.time + handAttackCooldown;
     }
     public void TakeDamage(int damage)
     {
@@ -211,6 +265,24 @@ public class PlayerController : MonoBehaviour
         if (controller != null)
         {
             controller.enabled = false;
+        }
+    }
+
+    void OnApplicationQuit()
+    {
+        // Сохраняем позицию игрока при выходе из игры
+        SaveData saveData = new SaveData();
+        saveData.playerPosition = transform.position;
+        saveData.playerRotation = transform.rotation;
+        saveData.playerHealth = currentHealth;
+        saveData.playerStamina = currentStamina; 
+
+        JsonDatabaseManager db = FindFirstObjectByType<JsonDatabaseManager>();
+        if (db != null && db.IsLoggedIn && db.CurrentUser != null)
+        {
+            saveData.userId = db.CurrentUser.Id;
+            db.SavePlayerProgress(saveData);
+            Debug.Log($"✅ Позиция игрока сохранена: {transform.position}");
         }
     }
 }

@@ -466,6 +466,46 @@ public class JsonDatabaseManager : MonoBehaviour
         return saves.Where(s => s.UserId == CurrentUser.Id).ToList();
     }
 
+
+    public void SavePlayerProgress(SaveData save)
+    {
+        Debug.Log($"📥 JsonDatabaseManager.SavePlayerProgress() вызван");
+
+        if (!IsLoggedIn || CurrentUser == null)
+        {
+            Debug.LogWarning("⚠️ SavePlayerProgress(): Пользователь не вошёл!");
+            return;
+        }
+
+        // Находим последнее сохранение игрока или создаём новое
+        var existingSave = saves.FirstOrDefault(s => s.UserId == CurrentUser.Id && s.SaveName == "AutoSave_LastPosition");
+
+        if (existingSave != null)
+        {
+            // Обновляем существующее сохранение
+            existingSave.PosX = save.PosX;
+            existingSave.PosY = save.PosY;
+            existingSave.PosZ = save.PosZ;
+            existingSave.RotX = save.RotX;
+            existingSave.RotY = save.RotY; 
+            existingSave.RotZ = save.RotZ;
+            existingSave.RotW = save.RotW;
+            existingSave.Health = save.Health;
+            existingSave.Stamina = save.Stamina;
+            existingSave.LastPlayed = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+        else
+        {
+            // Создаём новое сохранение
+            save.UserId = CurrentUser.Id;
+            save.SaveName = "AutoSave_LastPosition";
+            save.LastPlayed = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            saves.Add(save);
+        }
+
+        SaveAllData();
+        Debug.Log("✅ Позиция игрока сохранена в JSON!");
+    }
     public void UpdatePlayTime(int userId, float playTime)
     {
         var stats = statistics.FirstOrDefault(s => s.UserId == userId);
@@ -600,6 +640,19 @@ public class JsonDatabaseManager : MonoBehaviour
             return new List<StatisticsData>();
         }
         return statistics.OrderByDescending(s => s.Kills).ToList();
+    }
+
+    /// <summary>
+    /// Возвращает всех пользователей из базы данных
+    /// </summary>
+    public List<UserData> GetAllUsers()
+    {
+        if (users == null)
+        {
+            Debug.LogWarning("⚠️ GetAllUsers(): users = null!");
+            return new List<UserData>();
+        }
+        return users.ToList();
     }
     // === УТИЛИТЫ ===
 

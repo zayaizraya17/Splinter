@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ public class MenuManager : MonoBehaviour
     public GameObject hudPanel;
     public GameObject aboutPanel;
     public GameObject helpPanel;
+    public GameObject chartPanel;
 
     [Header("Главное меню")]
     public Button btnNewGame;
@@ -51,6 +53,7 @@ public class MenuManager : MonoBehaviour
     public GameObject myStatsPanel;
     public GameObject allStatsPanel;
     public GameObject exportPanel;
+    public GameObject chartsPanel;
 
     [Header("Статистика - Текст")]
     public TextMeshProUGUI myStatsContent;
@@ -61,16 +64,19 @@ public class MenuManager : MonoBehaviour
     public Button btnMyStats;           // ← ДОБАВИТЬ
     public Button btnAllStats;          // ← ДОБАВИТЬ
     public Button btnExportStats;
+    public Button btnCharts;
     public Button btnStatsBack;
     public Button btnMyStatsBack;
     public Button btnAllStatsBack;
     public Button btnExportBack;
+    public Button btnChartsBack;
     public Button btnExportMyStats;
     public Button btnExportAllStats;
     public TMP_InputField statsSearchInput;      // ← Поле поиска
-    public Button btnSortByKills;                 // ← Сортировка по убийствам
-    public Button btnSortByDeaths;                // ← Сортировка по смертям
+    public TMP_Dropdown dropdownSort;               // ← Сортировка по времени
 
+    [Header("Графики")]
+    public ChartSystem chartSystem;               // ← Система графиков
 
     [Header("HUD")]
     public TextMeshProUGUI healthText;
@@ -221,8 +227,42 @@ public class MenuManager : MonoBehaviour
             Debug.Log("✅ Btn_Export_Back настроена");
         }
 
-        if (btnSortByKills) btnSortByKills.onClick.AddListener(() => SortStatistics("kills"));
-        if (btnSortByDeaths) btnSortByDeaths.onClick.AddListener(() => SortStatistics("deaths"));
+        // Графики
+        if (btnCharts)
+        {
+            btnCharts.onClick.RemoveAllListeners();
+            btnCharts.onClick.AddListener(ShowChartsPanel);
+            Debug.Log("✅ Btn_Charts настроена");
+        }
+
+        if (btnChartsBack)
+        {
+            btnChartsBack.onClick.RemoveAllListeners();
+            btnChartsBack.onClick.AddListener(ShowStatisticsMainMenu);
+            Debug.Log("✅ Btn_Charts_Back настроена");
+        }
+
+
+
+        // Настройка Dropdown для сортировки
+        if (dropdownSort)
+        {
+            dropdownSort.onValueChanged.RemoveAllListeners();
+            dropdownSort.onValueChanged.AddListener(SortStatisticsByDropdown);
+
+            // Заполняем опции, если они ещё не заполнены в Unity
+            if (dropdownSort.options.Count == 0)
+            {
+                dropdownSort.ClearOptions();
+                dropdownSort.options.Add(new TMP_Dropdown.OptionData("Сортировка: Kills"));
+                dropdownSort.options.Add(new TMP_Dropdown.OptionData("Сортировка: Deaths"));
+                dropdownSort.options.Add(new TMP_Dropdown.OptionData("Сортировка: Damage"));
+                dropdownSort.options.Add(new TMP_Dropdown.OptionData("Сортировка: Time"));
+                dropdownSort.RefreshShownValue();
+            }
+
+            Debug.Log("✅ Dropdown сортировки настроен");
+        }
 
         // About и Help
         if (btnAbout)
@@ -396,7 +436,30 @@ public class MenuManager : MonoBehaviour
     }
 
     // === НАВИГАЦИЯ ПО ПАНЕЛЯМ СТАТИСТИКИ ===
+    public void CloseChartsPanel()
+    {
+        // 1. Скрываем панель графиков
+        if (chartsPanel != null) // Или имя твоей переменной панели
+        {
+            chartsPanel.SetActive(false);
+        }
 
+        // 2. Очищаем график (опционально, для производительности)
+        if (chartSystem != null)
+        {
+            chartSystem.ClearChart();
+        }
+
+        // 3. ВОЗВРАЩАЕМ УПРАВЛЕНИЕ ИГРОКУ
+        // Возвращаем курсор в режим блокировки (для шутера)
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        // Включаем время в игре (если оно останавливалось)
+        Time.timeScale = 1f;
+
+        Debug.Log("✅ Панель графиков закрыта, управление возвращено.");
+    }
     void ShowStatisticsMainMenu()
     {
         Debug.Log("📊 ShowStatisticsMainMenu()");
@@ -466,6 +529,7 @@ public class MenuManager : MonoBehaviour
         SetPanelActive(myStatsPanel, false);
         SetPanelActive(allStatsPanel, false);
         SetPanelActive(exportPanel, true);
+        SetPanelActive(chartsPanel, false);
 
         if (exportStatusText != null)
             exportStatusText.text = "";
@@ -473,6 +537,40 @@ public class MenuManager : MonoBehaviour
         ShowTooltip("Экспорт статистики. Выберите формат.");
     }
 
+    void ShowChartsPanel()
+    {
+        Debug.Log("📊 ShowChartsPanel()");
+
+        if (!databaseManager.IsLoggedIn)
+        {
+            ShowTooltip("❌ Сначала войдите в систему!");
+            return;
+        }
+
+        SetPanelActive(statisticsMainMenu, false);
+        SetPanelActive(myStatsPanel, false);
+        SetPanelActive(allStatsPanel, false);
+        SetPanelActive(exportPanel, false);
+        SetPanelActive(chartsPanel, true);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        // Получаем данные и строим графики
+        if (chartsPanel != null)
+        {
+            chartsPanel.SetActive(true);
+
+            // Освобождаем курсор для меню
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        if (chartSystem != null)
+        {
+            
+
+        }
+
+        ShowTooltip("Графики статистики. Нажмите НАЗАД.");
+    }
     // === ОТОБРАЖЕНИЕ СТАТИСТИКИ ===
 
     void DisplayMyStatistics()
@@ -977,40 +1075,138 @@ public class MenuManager : MonoBehaviour
     string FormatStatistics(StatisticsData stats, string playerName)
     {
         return $"=== СТАТИСТИКА: {playerName} ===\n\n" +
-               $"🎯 Убийств: {stats.Kills}\n" +
-               $"💀 Смертей: {stats.Deaths}\n" +
-               $"⚔️ Общий урон: {stats.TotalDamage}\n" +
-               $"⏱️ Время в игре: {stats.PlayTime:F0} сек.\n" +
-               $"📅 Последняя игра: {stats.LastPlayed}";
+               $"Убийств: {stats.Kills}\n" +
+               $"Смертей: {stats.Deaths}\n" +
+               $"Общий урон: {stats.TotalDamage}\n" +
+               $"Время в игре: {stats.PlayTime:F0} сек.\n" +
+               $"Последняя игра: {stats.LastPlayed}";
     }
 
     void FilterStatistics(string searchText)
     {
         // Поиск по статистике (требование 2.j)
         ShowTooltip($"Поиск: {searchText}");
-        // Здесь можно добавить фильтрацию списка игроков
+
+        if (string.IsNullOrEmpty(searchText))
+        {
+            // Если поиск пустой - показываем все данные
+            if (allStatsPanel.activeSelf)
+                DisplayAllStatistics();
+            return;
+        }
+
+        // Получаем все данные
+        var allStats = databaseManager.GetAllStats();
+        var allUsers = databaseManager.GetAllUsers();
+
+        // Фильтруем по имени игрока
+        var filteredStats = allStats.Where(s =>
+        {
+            var user = allUsers.FirstOrDefault(u => u.Id == s.UserId);
+            if (user != null && user.Login.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
+        }).ToList();
+
+        // Отображаем отфильтрованные данные
+        if (allStatsContent == null)
+        {
+            Debug.LogError("❌ allStatsContent не назначен!");
+            return;
+        }
+
+        if (filteredStats.Count == 0)
+        {
+            allStatsContent.text = $"Игроки по запросу \"{searchText}\" не найдены.";
+            return;
+        }
+
+        string text = "Игрок\t\tУбийства\tСмерти\tУрон\tВремя\n";
+        text += "===========================================\n";
+
+        int rank = 1;
+        foreach (var stat in filteredStats)
+        {
+            var user = allUsers.FirstOrDefault(u => u.Id == stat.UserId);
+            string playerName = user != null ? user.Login : "Неизвестно";
+
+            // Форматируем время
+            TimeSpan timeSpan = TimeSpan.FromSeconds(stat.PlayTime);
+            string timeFormatted = $"{(int)timeSpan.TotalMinutes}:{timeSpan.Seconds:D2} мин";
+
+            text += $"{rank}. {playerName}\t{stat.Kills}\t\t{stat.Deaths}\t{stat.TotalDamage}\t{timeFormatted}\n";
+            rank++;
+        }
+
+        allStatsContent.text = text;
+        ShowTooltip($"Найдено игроков: {filteredStats.Count}"); 
     }
 
-    void SortStatistics(string sortBy)
-    {
-        ShowTooltip($"Сортировка по: {sortBy}");
-        if (sortBy == "kills")
-            ShowAllStatistics(); // Уже сортировано по убийствам
-        else if (sortBy == "deaths")
-            ShowTooltip("Сортировка по смертям (в разработке)");
-    }
-    void ShowMyStatistics()
-    {
-        ShowMyStatsPanel();
-    }
 
-    void ShowAllStatistics()
+    void SortStatisticsByDropdown(int index)
     {
-        ShowAllStatsPanel();
+        if (!databaseManager.IsLoggedIn) return;
+
+        var allStats = databaseManager.GetAllStats();
+        if (allStats == null || allStats.Count == 0) return;
+
+        List<StatisticsData> sortedStats = new List<StatisticsData>(allStats);
+
+        // Сортировка по выбранному параметру
+        switch (index)
+        {
+            case 0: // Kills
+                sortedStats.Sort((a, b) => b.Kills.CompareTo(a.Kills));
+                ShowTooltip("Сортировка: По убийствам");
+                break;
+            case 1: // Deaths
+                sortedStats.Sort((a, b) => b.Deaths.CompareTo(a.Deaths));
+                ShowTooltip("Сортировка: По смертям");
+                break;
+            case 2: // Damage
+                sortedStats.Sort((a, b) => b.TotalDamage.CompareTo(a.TotalDamage));
+                ShowTooltip("Сортировка: По урону");
+                break;
+            case 3: // Time
+                sortedStats.Sort((a, b) => b.PlayTime.CompareTo(a.PlayTime));
+                ShowTooltip("Сортировка: По времени");
+                break;
+        }
+
+        // Обновляем отображение
+        DisplaySortedStatistics(sortedStats);
+
+
+
+        string GetSortName(string sortBy)
+        {
+            switch (sortBy)
+            {
+                case "kills": return "убийствам";
+                case "deaths": return "смертям";
+                case "damage": return "урону";
+                case "time": return "времени";
+                default: return sortBy;
+            }
+        }
     }
-    /// <summary>
-    /// Экспорт всей статистики в Excel (CSV)
-    /// </summary>
+    void DisplaySortedStatistics(List<StatisticsData> sortedStats)
+    {
+        if (allStatsContent == null) return;
+
+        string text = "Игрок\t\tУбийства\tСмерти\tУрон\tВремя\n";
+        text += "===========================================\n";
+
+        int rank = 1;
+        foreach (var stat in sortedStats)
+        {
+            text += $"{rank}. Игрок #{stat.UserId}\t{stat.Kills}\t\t{stat.Deaths}\t{stat.TotalDamage}\t{stat.PlayTime:F1}с\n";
+            rank++;
+        }
+
+        allStatsContent.text = text;
+    }
+    /// 
     public void ExportAllStatistics()
     {
         if (!databaseManager.IsLoggedIn)
@@ -1102,11 +1298,19 @@ public class MenuManager : MonoBehaviour
     }
 
     // Вспомогательный метод для получения всех пользователей
-    System.Collections.Generic.List<UserData> GetAllUsers()
+    // Метод для получения всех пользователей (нужен для экспорта и админ-панели)
+    private List<UserData> GetAllUsers()
     {
-        // Это упрощённая версия - в реальности нужно добавить метод в DatabaseManager
-        return new System.Collections.Generic.List<UserData>();
+        if (databaseManager == null)
+        {
+            Debug.LogError("DatabaseManager не инициализирован!");
+            return new List<UserData>();
+        }
+
+        // Получаем данные напрямую из базы через JsonDatabaseManager
+        return databaseManager.GetAllUsers();
     }
+
 
     // === HUD ===
 
