@@ -9,7 +9,7 @@ public class WeaponManager : MonoBehaviour
 
     [Header("Система оружия")]
     public int currentWeaponIndex = 0;
-    public string[] weaponNames = { "Пистолет", "Дробовик", "Нож" };
+    public string[] weaponNames = { "Пистолет", "Дробовик", "Нож", "Удар рукой" };
 
     [Header("Пистолет")]
     public int pistolDamage = 20;
@@ -34,6 +34,13 @@ public class WeaponManager : MonoBehaviour
     public float knifeFireRate = 0.5f;
     private float knifeNextFireTime = 0f;
     public float knifeRange = 2f;
+
+    [Header("Удар рукой")]
+    public float handDamage = 5f;
+    public float handRange = 2.5f;
+    public float handEnergyCost = 0f;
+    public float handFireRate = 0.5f;
+    private float handNextAttackTime = 0f;
 
     [Header("Ссылки")]
     public PlayerController playerController;
@@ -176,6 +183,15 @@ public class WeaponManager : MonoBehaviour
                     FireKnife();
                 }
                 break;
+
+            case 3: // Удар рукой
+                if (currentTime >= handNextAttackTime)
+                {
+                    playerController.currentStamina -= handEnergyCost;
+                    handNextAttackTime = currentTime + handFireRate;
+                    FireHand();
+                }
+                break;
         }
 
         Debug.Log($"Оружие: {weaponNames[currentWeaponIndex]} | Патроны: {GetCurrentAmmo()}");
@@ -196,6 +212,19 @@ public class WeaponManager : MonoBehaviour
 
                 // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
                 UpdateDamageStatistics(pistolDamage + damageBonus);
+
+            }
+            else
+            {
+                // Проверяем, попали ли в босса
+                Boss boss = hit.transform.GetComponent<Boss>();
+                if (boss != null)
+                {
+                    boss.TakeDamage(pistolDamage + damageBonus, gameObject);
+
+                    // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
+                    UpdateDamageStatistics(pistolDamage + damageBonus);
+                }
             }
         }
     }
@@ -233,6 +262,21 @@ public class WeaponManager : MonoBehaviour
 
                     Invoke(nameof(ResetEnemyHitFlags), 0.1f);
                 }
+                else
+                {
+                    // Проверяем, попали ли в босса
+                    Boss boss = hit.transform.GetComponent<Boss>();
+                    if (boss != null && !bossAlreadyHitThisShot.Contains(hit.transform.GetInstanceID()))
+                    {
+                        bossAlreadyHitThisShot.Add(hit.transform.GetInstanceID());
+                        boss.TakeDamage(shotgunDamage + damageBonus, gameObject);
+
+                        // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
+                        UpdateDamageStatistics(shotgunDamage + damageBonus);
+
+                        Invoke(nameof(ResetBossHitFlags), 0.1f);
+                    }
+                }
             }
         }
 
@@ -252,6 +296,15 @@ public class WeaponManager : MonoBehaviour
         }
     }
 
+    // Список для отслеживания попаданий в босса за один выстрел
+    private System.Collections.Generic.List<int> bossAlreadyHitThisShot = new System.Collections.Generic.List<int>();
+
+    // Метод для сброса флагов у босса
+    void ResetBossHitFlags()
+    {
+        bossAlreadyHitThisShot.Clear();
+    }
+
     void FireKnife()
     {
         RaycastHit hit;
@@ -267,13 +320,62 @@ public class WeaponManager : MonoBehaviour
                 // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
                 UpdateDamageStatistics(knifeDamage + damageBonus);
             }
+            else
+            {
+                // Проверяем, попали ли в босса
+                Boss boss = hit.transform.GetComponent<Boss>();
+                if (boss != null)
+                {
+                    boss.TakeDamage(knifeDamage + damageBonus, gameObject);
+
+                    // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
+                    UpdateDamageStatistics(knifeDamage + damageBonus);
+                }
+            }
         }
         else
         {
             Debug.Log("Нож промахнулся (слишком далеко)");
         }
+
     }
 
+
+    void FireHand()
+    {
+        Debug.Log("Игрок атакует рукой!");
+
+        RaycastHit hit;
+        if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, handRange))
+        {
+            Debug.Log($"Удар рукой попал в: {hit.transform.name}");
+            Enemy enemy = hit.transform.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage((int)handDamage, gameObject);
+                Debug.Log($"Враг получил {handDamage} урона от руки!");
+
+
+                // === ОБНОВЛЕНИЕ СТАТИСТИКИ УРОНА ===
+                UpdateDamageStatistics((int)handDamage);
+            }
+            else
+            {
+                // Проверяем, попали ли в босса
+                Boss boss = hit.transform.GetComponent<Boss>();
+                if (boss != null)
+                {
+                    // Наносим урон боссу
+                    boss.TakeDamage(handDamage, gameObject);
+                    Debug.Log($"Босс получил {handDamage} урона от руки!");
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("Удар рукой промахнулся!");
+        }
+    }
     // === МЕТОД ВЫНЕСЕН ОТДЕЛЬНО ===
     void UpdateDamageStatistics(int damage)
     {
@@ -338,6 +440,7 @@ public class WeaponManager : MonoBehaviour
             case 0: return pistolCurrentAmmo;
             case 1: return shotgunCurrentAmmo;
             case 2: return 999;
+            case 3: return 999;
             default: return 0;
         }
     }
@@ -349,6 +452,7 @@ public class WeaponManager : MonoBehaviour
             case 0: return pistolMaxAmmo;
             case 1: return shotgunMaxAmmo;
             case 2: return 999;
+            case 3: return 999;
             default: return 0;
         }
     }
@@ -374,6 +478,7 @@ public class WeaponManager : MonoBehaviour
             case 0: return pistolEnergyCost;
             case 1: return shotgunEnergyCost;
             case 2: return knifeEnergyCost;
+            case 3: return handEnergyCost;
             default: return 0;
         }
     }
