@@ -28,17 +28,10 @@ public class PlayerController : MonoBehaviour
     public float mouseSensitivity = 2f;
 
 
-    [Header("Атака рукой")]
-    public float handDamage = 5f;
-    public float handRange = 2.5f;
-    public float handAttackCooldown = 0.5f;
-    private float handNextAttackTime = 0f;
-
     // Внутренние переменные
     private CharacterController controller;
     private Vector3 velocity;
     private bool isGrounded;
-    private float rotationY = 0f; // Для поворота камеры вверх/вниз (если нужно)
 
     void Start()
     {
@@ -51,6 +44,7 @@ public class PlayerController : MonoBehaviour
         // Инициализация userId с повторными попытками
         Invoke(nameof(TryInitializeUserId), 0.1f);
     }
+
 
     void TryInitializeUserId()
     {
@@ -122,9 +116,31 @@ public class PlayerController : MonoBehaviour
         // Ограничиваем значения стамины от 0 до Max
         currentStamina = Mathf.Clamp(currentStamina, 0, maxStamina);
 
-        // 4. Движение
+        // 4. Движение с проверкой коллизий
         Vector3 move = transform.right * x + transform.forward * z;
-        controller.Move(move * currentSpeed * Time.deltaTime);
+
+        // Проверяем, нет ли препятствий перед движением
+        if (move.magnitude >= 0.1f)
+        {
+            // Raycast вниз и вперед для проверки стен
+            RaycastHit wallHit;
+            float checkDistance = 0.5f; // Дистанция проверки стены
+
+            // Если впереди стена - не двигаемся в этом направлении
+            if (!Physics.Raycast(transform.position, move.normalized, out wallHit, checkDistance, ~0, QueryTriggerInteraction.Ignore))
+            {
+                controller.Move(move * currentSpeed * Time.deltaTime);
+            }
+            else
+            {
+                // Пытаемся двигаться только вдоль стены (скольжение)
+                Vector3 slideMove = Vector3.ProjectOnPlane(move, wallHit.normal);
+                if (slideMove.magnitude > 0.1f)
+                {
+                    controller.Move(slideMove * currentSpeed * Time.deltaTime);
+                }
+            }
+        }
 
         // 5. Прыжок
         if (Input.GetButtonDown("Jump") && isGrounded && currentStamina >= staminaCostJump)
@@ -144,61 +160,9 @@ public class PlayerController : MonoBehaviour
         // Поворачиваем только тело игрока по Y (влево-вправо)
         transform.Rotate(0, mouseX, 0);
 
-        // 8. Атака рукой (Правая кнопка мыши)
-        if (Input.GetMouseButtonDown(1))
-        {
-            HandAttack();
-        }
-
-        // Если захочешь добавить небольшой наклон камеры вверх/вниз, раскомментируй ниже:
-        /*
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-        rotationY -= mouseY;
-        rotationY = Mathf.Clamp(rotationY, -30f, 30f); // Ограничение угла
-        cameraTransform.localRotation = Quaternion.Euler(rotationY, 0, 0);
-        */
     }
 
-    void HandAttack()
-    {
-        // Проверка кулдауна
-        if (Time.time < handNextAttackTime)
-        {
-            return;
-        }
-
-        Debug.Log("Игрок атакует рукой!");
-
-        // Проверяем попадание в радиусе атаки рукой
-        RaycastHit hit;
-        Vector3 direction = transform.forward;
-
-        if (Physics.Raycast(transform.position, direction, out hit, handRange))
-        {
-            Debug.Log($"Атака рукой попала в: {hit.transform.name}");
-
-            Enemy enemy = hit.transform.GetComponent<Enemy>();
-            if (enemy != null)
-            {
-                // Наносим урон врагу
-                enemy.TakeDamage(handDamage, gameObject);
-                Debug.Log($"Враг получил {handDamage} урона от руки!");
-
-                // Если мирная сущность - заставляем убегать
-                if (enemy.entityType == Enemy.EntityType.Peaceful)
-                {
-                    enemy.StartFleeing();
-                }
-            }
-        }
-        else
-        {
-            Debug.Log("Атака рукой промахнулась!");
-        }
-
-        // Обновляем время следующей атаки
-        handNextAttackTime = Time.time + handAttackCooldown;
-    }
+    
     public void TakeDamage(int damage)
     {
         currentHealth -= damage;
@@ -275,7 +239,7 @@ public class PlayerController : MonoBehaviour
         saveData.playerPosition = transform.position;
         saveData.playerRotation = transform.rotation;
         saveData.playerHealth = currentHealth;
-        saveData.playerStamina = currentStamina; 
+        saveData.playerStamina = currentStamina;
 
         JsonDatabaseManager db = FindFirstObjectByType<JsonDatabaseManager>();
         if (db != null && db.IsLoggedIn && db.CurrentUser != null)
