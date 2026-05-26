@@ -1,52 +1,69 @@
+using UnityEngine;
+using UnityEngine.UI; // Обязательно для работы с UI
 
-﻿using UnityEngine;
-
-public class Crosshair : MonoBehaviour
+public class CrosshairUI : MonoBehaviour
 {
-    [Header("Настройки прицела")]
-    public float crosshairSize = 10f;       // Размер прицела
-    public float crosshairThickness = 2f;   // Толщина линий
-    public Color crosshairColor = Color.green;  // Цвет прицела
+    [Header("Settings")]
+    public Sprite crosshairSprite;
+    public float crosshairScale = 1f;
+    public Color crosshairColor = Color.white;
 
-    [Header("Отображение")]
-    public bool showCrosshair = true;       // Показывать ли прицел
+    private Image crosshairImage;
+    private GameObject crosshairObj;
+    private Canvas canvas;
 
-    void OnGUI()
+    void Start()
     {
-        if (!showCrosshair) return;
-
-        float centerX = Screen.width / 2f;
-        float centerY = Screen.height / 2f;
-
-        // Создаем стиль для рисования
-        GUIStyle style = new GUIStyle();
-        style.normal.background = MakeTexture((int)crosshairThickness, (int)crosshairSize, crosshairColor);
-
-        // Вертикальная линия
-        GUI.DrawTexture(new Rect(centerX - crosshairThickness / 2f, centerY - crosshairSize / 2f, crosshairThickness, crosshairSize), style.normal.background);
-
-        // Горизонтальная линия
-        GUI.DrawTexture(new Rect(centerX - crosshairSize / 2f, centerY - crosshairThickness / 2f, crosshairSize, crosshairThickness), style.normal.background);
-
-        // Точка в центре (опционально)
-        GUIStyle dotStyle = new GUIStyle();
-        dotStyle.normal.background = MakeTexture(4, 4, crosshairColor);
-        GUI.DrawTexture(new Rect(centerX - 2f, centerY - 2f, 4, 4), dotStyle.normal.background);
+        SetupCrosshair();
+        // Скрываем прицел при старте, чтобы он не мелькал до начала игры
+        HideCrosshair();
     }
 
-    // Создаем текстуру нужного размера и цвета
-    Texture2D MakeTexture(int width, int height, Color color)
+    void SetupCrosshair()
     {
-        Color[] pixels = new Color[width * height];
-        for (int i = 0; i < pixels.Length; i++)
+        // Создаем объект прицела программно
+        crosshairObj = new GameObject("Crosshair");
+        crosshairObj.transform.SetParent(transform); // Или найдите Canvas: GameObject.Find("Canvas").transform
+
+        // Если у вас есть Canvas на сцене, лучше привязать к нему, чтобы прицел был поверх всего
+        Canvas[] canvases = FindObjectsOfType<Canvas>();
+        if (canvases.Length > 0)
         {
-            pixels[i] = color;
+            crosshairObj.transform.SetParent(canvases[0].transform, false);
         }
 
-        Texture2D texture = new Texture2D(width, height);
-        texture.SetPixels(pixels);
-        texture.Apply();
+        crosshairImage = crosshairObj.AddComponent<Image>();
+        crosshairImage.sprite = crosshairSprite;
+        crosshairImage.color = crosshairColor;
 
-        return texture;
+        RectTransform rectTransform = crosshairObj.GetComponent<RectTransform>();
+        rectTransform.sizeDelta = new Vector2(32 * crosshairScale, 32 * crosshairScale); // Базовый размер 32x32
+
+        // Центрируем прицел
+        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = Vector2.zero;
+
+        // Убедимся, что прицел поверх всего
+        crosshairObj.transform.SetAsLastSibling();
+    }
+
+    public void ShowCrosshair()
+    {
+        if (crosshairObj != null)
+        {
+            crosshairObj.SetActive(true);
+            // Debug.Log("Прицел показан");
+        }
+    }
+
+    public void HideCrosshair()
+    {
+        if (crosshairObj != null)
+        {
+            crosshairObj.SetActive(false);
+            // Debug.Log("Прицел скрыт");
+        }
     }
 }
