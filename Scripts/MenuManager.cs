@@ -13,7 +13,7 @@ public class MenuManager : MonoBehaviour
     public static bool IsMenuOpen { get; private set; } = true;
     public static bool IsGameRunning { get; private set; } = false;
 
-        [Header("Панели")]
+    [Header("Панели")]
     public GameObject preloaderPanel;
     public GameObject mainMenuPanel;
     public GameObject registerPanel;
@@ -28,11 +28,10 @@ public class MenuManager : MonoBehaviour
     [Header("Главное меню")]
     public Button btnNewGame;
     public Button btnContinue;
-    public Button btnStatistics;
     public Button btnExit;
-    public Button btnAbout;           
-    public Button btnHelp;              
-    public Button btnAboutBack;        
+    public Button btnAbout;
+    public Button btnHelp;
+    public Button btnAboutBack;
     public Button btnHelpBack;
 
     [Header("Регистрация")]
@@ -79,7 +78,7 @@ public class MenuManager : MonoBehaviour
 
 
     [Header("Пользовательское меню (в игре)")]
-    public Button btnUserStats;         // Статистика в пользовательском меню
+    public Button btnStatistics;         // Статистика в пользовательском меню
     public Button btnUserCharts;        // Графики в пользовательском меню
     public Button btnSaveAndExit;       // Сохранить и выйти
     public Button btnUserMenuBack;      // Назад в игру из пользовательского меню
@@ -110,6 +109,7 @@ public class MenuManager : MonoBehaviour
     private bool isGameRunning = false;
     private bool isPreloading = true;
     private float gameStartTime = 0f;
+    private bool statsOpenedFromUserMenu = false; // Откуда открыта статистика: из пользовательского меню или главного
 
     // События (требование 3.h)
     public event Action OnGameStarted;
@@ -165,17 +165,15 @@ public class MenuManager : MonoBehaviour
     void SubscribeToButtons()
     {
         Debug.Log("🔧 SubscribeToButtons() ВЫЗВАН!");
-     
+
         // Главное меню
         if (btnNewGame) btnNewGame.onClick.AddListener(ShowRegisterPanel);
         if (btnContinue) btnContinue.onClick.AddListener(ShowLoginPanel);
-        if (btnStatistics) btnStatistics.onClick.AddListener(ShowStatisticsPanel);
         if (btnExit) btnExit.onClick.AddListener(ExitGame);
 
         // Пользовательское меню (в игре)
         if (btnSaveAndExit) btnSaveAndExit.onClick.AddListener(SaveAndExitToMainMenu);
-        if (btnUserStats) btnUserStats.onClick.AddListener(ShowUserStatsPanel);
-        if (btnUserCharts) btnUserCharts.onClick.AddListener(ShowUserChartsPanel);
+        if (btnStatistics) btnStatistics.onClick.AddListener(ShowStatisticsPanel);
         if (btnUserMenuBack) btnUserMenuBack.onClick.AddListener(CloseUserMenu);
 
         // Регистрация
@@ -201,17 +199,12 @@ public class MenuManager : MonoBehaviour
             btnStatsBack.onClick.RemoveAllListeners();
             btnStatsBack.onClick.AddListener(() =>
             {
-                if (isGameRunning && databaseManager.IsLoggedIn)
+                if (statsOpenedFromUserMenu)
                 {
-                    // Если игра запущена и пользователь вошел - возвращаемся в пользовательское меню
-                    CloseUserMenu();
+                    SetPanelActive(statisticsPanel, false);
                     SetPanelActive(userMenuPanel, true);
                 }
-                else
-                {
-                    // Иначе - в главное меню
-                    ShowMainMenu();
-                }
+
             });
             Debug.Log("✅ Btn_Stats_Back настроена");
         }
@@ -242,22 +235,58 @@ public class MenuManager : MonoBehaviour
         if (btnMyStatsBack)
         {
             btnMyStatsBack.onClick.RemoveAllListeners();
-            btnMyStatsBack.onClick.AddListener(ShowStatisticsMainMenu);
-            Debug.Log("✅ Btn_MyStats_Back настроена");
+            btnMyStatsBack.onClick.AddListener(() =>
+            {
+                if (statsOpenedFromUserMenu)
+                {
+                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
+                    SetPanelActive(statisticsPanel, false);
+                    SetPanelActive(userMenuPanel, true);
+                }
+                else
+                {
+                    // Иначе - в главное меню статистики
+                    ShowStatisticsMainMenu();
+                }
+            });
         }
 
         if (btnAllStatsBack)
         {
             btnAllStatsBack.onClick.RemoveAllListeners();
-            btnAllStatsBack.onClick.AddListener(ShowStatisticsMainMenu);
-            Debug.Log("✅ Btn_AllStats_Back настроена");
+            btnAllStatsBack.onClick.AddListener(() =>
+            {
+                if (statsOpenedFromUserMenu)
+                {
+                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
+                    SetPanelActive(statisticsPanel, false);
+                    SetPanelActive(userMenuPanel, true);
+                }
+                else
+                {
+                    // Иначе - в главное меню статистики
+                    ShowStatisticsMainMenu();
+                }
+            });
         }
 
         if (btnExportBack)
         {
             btnExportBack.onClick.RemoveAllListeners();
-            btnExportBack.onClick.AddListener(ShowStatisticsMainMenu);
-            Debug.Log("✅ Btn_Export_Back настроена");
+            btnExportBack.onClick.AddListener(() =>
+            {
+                if (statsOpenedFromUserMenu)
+                {
+                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
+                    SetPanelActive(statisticsPanel, false);
+                    SetPanelActive(userMenuPanel, true);
+                }
+                else
+                {
+                    // Иначе - в главное меню статистики
+                    ShowStatisticsMainMenu();
+                }
+            });
         }
 
         // Графики
@@ -271,7 +300,20 @@ public class MenuManager : MonoBehaviour
         if (btnChartsBack)
         {
             btnChartsBack.onClick.RemoveAllListeners();
-            btnChartsBack.onClick.AddListener(ShowStatisticsMainMenu);
+            btnChartsBack.onClick.AddListener(() =>
+            {
+                if (statsOpenedFromUserMenu)
+                {
+                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
+                    SetPanelActive(statisticsPanel, false);
+                    SetPanelActive(userMenuPanel, true);
+                }
+                else
+                {
+                    // Иначе - в главное меню статистики
+                    ShowStatisticsMainMenu();
+                }
+            });
             Debug.Log("✅ Btn_Charts_Back настроена");
         }
 
