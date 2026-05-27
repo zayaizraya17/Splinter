@@ -1,5 +1,6 @@
 using UnityEngine;
 
+
 public class WeaponManager : MonoBehaviour
 {
     [Header("Настройки оружия")]
@@ -45,6 +46,7 @@ public class WeaponManager : MonoBehaviour
     [Header("Ссылки")]
     public PlayerController playerController;
     public JsonDatabaseManager databaseManager;
+    public PlayerInventory playerInventory;
 
     private bool isReloading = false;
     private float lastReloadAttemptTime = 0f;
@@ -60,10 +62,16 @@ public class WeaponManager : MonoBehaviour
         if (playerController == null)
             playerController = GetComponentInParent<PlayerController>();
 
-        // === ИНИЦИАЛИЗАЦИЯ DATABASE MANAGER ===
-        if (databaseManager == null)
-            databaseManager = FindFirstObjectByType<JsonDatabaseManager>();
-        // =======================================
+
+        // === ИНИЦИАЛИЗАЦИЯ PLAYER INVENTORY ===
+        if (playerInventory == null)
+            playerInventory = GetComponent<PlayerInventory>();
+
+        if (playerInventory == null)
+            playerInventory = GetComponentInParent<PlayerInventory>();
+
+        if (playerInventory == null)
+            playerInventory = FindObjectOfType<PlayerInventory>();
 
         Debug.Log($"Оружие: {weaponNames[currentWeaponIndex]}");
     }
@@ -194,7 +202,7 @@ public class WeaponManager : MonoBehaviour
                 break;
         }
 
-        Debug.Log($"Оружие: {weaponNames[currentWeaponIndex]} | Патроны: {GetCurrentAmmo()}");
+        Debug.Log($"Оружие: {weaponNames[currentWeaponIndex]} | Патроны в магазине: {GetCurrentAmmo()}");
     }
 
     void FirePistol()
@@ -413,6 +421,23 @@ public class WeaponManager : MonoBehaviour
             return;
         }
 
+        // Проверяем наличие инвентаря
+        if (playerInventory == null)
+        {
+            Debug.LogError("PlayerInventory не найден! Перезарядка невозможна без инвентаря.");
+            return;
+        }
+
+        // Проверяем наличие патронов в запасе перед перезарядкой
+        AmmoType ammoType = currentWeaponIndex == 0 ? AmmoType.Pistol :
+                           currentWeaponIndex == 1 ? AmmoType.Shotgun : AmmoType.Pistol;
+
+        if (!playerInventory.HasAmmo(ammoType))
+        {
+            string weaponName = currentWeaponIndex == 0 ? "Пистолет" : "Дробовик";
+            Debug.Log($"Нет патронов в запасе для оружия: {weaponName}! Найдите патроны.");
+            return;
+        }
         isReloading = true;
         Debug.Log("Перезарядка...");
         Invoke(nameof(FinishReload), 2f);
@@ -420,17 +445,41 @@ public class WeaponManager : MonoBehaviour
 
     void FinishReload()
     {
-        switch (currentWeaponIndex)
         {
-            case 0:
-                pistolCurrentAmmo = pistolMaxAmmo;
-                break;
-            case 1:
-                shotgunCurrentAmmo = shotgunMaxAmmo;
-                break;
+            // Проверяем наличие инвентаря и патронов перед перезарядкой
+            if (playerInventory == null)
+            {
+                Debug.LogError("PlayerInventory не найден! Перезарядка невозможна без инвентаря.");
+                isReloading = false;
+                return;
+            }
+
+            AmmoType ammoType = currentWeaponIndex == 0 ? AmmoType.Pistol :
+                               currentWeaponIndex == 1 ? AmmoType.Shotgun : AmmoType.Pistol;
+
+            // ЕЩЕ РАЗ ПРОВЕРЯЕМ наличие патронов (на случай если подобрали во время перезарядки)
+            if (!playerInventory.HasAmmo(ammoType))
+            {
+                string weaponName = currentWeaponIndex == 0 ? "Пистолет" : "Дробовик";
+                Debug.Log($"Нет патронов в запасе для оружия: {weaponName}! Найдите патроны.");
+                isReloading = false;
+                return;
+            }
+
+            // Используем систему инвентаря для перезарядки
+            switch (currentWeaponIndex)
+            {
+                case 0:
+                    playerInventory.ReloadWeapon(ammoType, ref pistolCurrentAmmo, pistolMaxAmmo);
+                    break;
+                case 1:
+                    playerInventory.ReloadWeapon(ammoType, ref shotgunCurrentAmmo, shotgunMaxAmmo);
+                    break;
+            }
+
+            isReloading = false;
+            Debug.Log($"Перезаряжено! {GetCurrentAmmo()}/{GetMaxAmmo()}");
         }
-        isReloading = false;
-        Debug.Log($"Перезаряжено! {GetCurrentAmmo()}/{GetMaxAmmo()}");
     }
 
     public int GetCurrentAmmo()
