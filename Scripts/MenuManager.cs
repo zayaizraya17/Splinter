@@ -199,8 +199,14 @@ public class MenuManager : MonoBehaviour
             btnStatsBack.onClick.RemoveAllListeners();
             btnStatsBack.onClick.AddListener(() =>
             {
-               
-
+                // Возврат в пользовательское меню
+                SetPanelActive(statisticsPanel, false);
+                SetPanelActive(userMenuPanel, true);
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                MenuManager.IsMenuOpen = true;
+                ShowTooltip("Пользовательское меню.");
+                Debug.Log("🔙 btnStatsBack - Возврат в пользовательское меню");
 
             });
         }
