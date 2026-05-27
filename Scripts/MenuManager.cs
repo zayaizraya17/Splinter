@@ -199,19 +199,12 @@ public class MenuManager : MonoBehaviour
             btnStatsBack.onClick.RemoveAllListeners();
             btnStatsBack.onClick.AddListener(() =>
             {
-                if (statsOpenedFromUserMenu)
-                {
-                    SetPanelActive(statisticsPanel, false);
-                    SetPanelActive(userMenuPanel, true);
-                }
+               
+
 
             });
-            Debug.Log("✅ Btn_Stats_Back настроена");
         }
-        else
-        {
-            Debug.Log("⚠️ Btn_Stats_Back не назначена");
-        }
+        
 
             // Кнопка "Вся статистика"
             if (btnAllStats)
@@ -237,17 +230,9 @@ public class MenuManager : MonoBehaviour
             btnMyStatsBack.onClick.RemoveAllListeners();
             btnMyStatsBack.onClick.AddListener(() =>
             {
-                if (statsOpenedFromUserMenu)
-                {
-                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
-                    SetPanelActive(statisticsPanel, false);
-                    SetPanelActive(userMenuPanel, true);
-                }
-                else
-                {
-                    // Иначе - в главное меню статистики
+
                     ShowStatisticsMainMenu();
-                }
+              
             });
         }
 
@@ -256,17 +241,9 @@ public class MenuManager : MonoBehaviour
             btnAllStatsBack.onClick.RemoveAllListeners();
             btnAllStatsBack.onClick.AddListener(() =>
             {
-                if (statsOpenedFromUserMenu)
-                {
-                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
-                    SetPanelActive(statisticsPanel, false);
-                    SetPanelActive(userMenuPanel, true);
-                }
-                else
-                {
-                    // Иначе - в главное меню статистики
+
                     ShowStatisticsMainMenu();
-                }
+
             });
         }
 
@@ -275,17 +252,9 @@ public class MenuManager : MonoBehaviour
             btnExportBack.onClick.RemoveAllListeners();
             btnExportBack.onClick.AddListener(() =>
             {
-                if (statsOpenedFromUserMenu)
-                {
-                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
-                    SetPanelActive(statisticsPanel, false);
-                    SetPanelActive(userMenuPanel, true);
-                }
-                else
-                {
-                    // Иначе - в главное меню статистики
+                
                     ShowStatisticsMainMenu();
-                }
+                
             });
         }
 
@@ -302,17 +271,9 @@ public class MenuManager : MonoBehaviour
             btnChartsBack.onClick.RemoveAllListeners();
             btnChartsBack.onClick.AddListener(() =>
             {
-                if (statsOpenedFromUserMenu)
-                {
-                    // Если статистика была открыта из пользовательского меню - возвращаемся туда
-                    SetPanelActive(statisticsPanel, false);
-                    SetPanelActive(userMenuPanel, true);
-                }
-                else
-                {
-                    // Иначе - в главное меню статистики
+
                     ShowStatisticsMainMenu();
-                }
+                
             });
             Debug.Log("✅ Btn_Charts_Back настроена");
         }
