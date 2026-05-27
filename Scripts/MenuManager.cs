@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+
 
 public class MenuManager : MonoBehaviour
 {
@@ -22,6 +23,7 @@ public class MenuManager : MonoBehaviour
     public GameObject aboutPanel;
     public GameObject helpPanel;
     public GameObject chartPanel;
+    public GameObject userMenuPanel;  // Пользовательское меню (во время игры)
 
     [Header("Главное меню")]
     public Button btnNewGame;
@@ -75,6 +77,13 @@ public class MenuManager : MonoBehaviour
     public TMP_InputField statsSearchInput;      // ← Поле поиска
     public TMP_Dropdown dropdownSort;               // ← Сортировка по времени
 
+
+    [Header("Пользовательское меню (в игре)")]
+    public Button btnUserStats;         // Статистика в пользовательском меню
+    public Button btnUserCharts;        // Графики в пользовательском меню
+    public Button btnSaveAndExit;       // Сохранить и выйти
+    public Button btnUserMenuBack;      // Назад в игру из пользовательского меню
+
     [Header("Графики")]
     public ChartSystem chartSystem;               // ← Система графиков
 
@@ -95,7 +104,7 @@ public class MenuManager : MonoBehaviour
     public JsonDatabaseManager databaseManager;
     public PlayerController playerController;
     public WeaponManager weaponManager;
-
+    public CrosshairUI crosshairUI;
 
     // Состояние
     private bool isGameRunning = false;
@@ -162,6 +171,12 @@ public class MenuManager : MonoBehaviour
         if (btnStatistics) btnStatistics.onClick.AddListener(ShowStatisticsPanel);
         if (btnExit) btnExit.onClick.AddListener(ExitGame);
 
+        // Пользовательское меню (в игре)
+        if (btnSaveAndExit) btnSaveAndExit.onClick.AddListener(SaveAndExitToMainMenu);
+        if (btnUserStats) btnUserStats.onClick.AddListener(ShowUserStatsPanel);
+        if (btnUserCharts) btnUserCharts.onClick.AddListener(ShowUserChartsPanel);
+        if (btnUserMenuBack) btnUserMenuBack.onClick.AddListener(CloseUserMenu);
+
         // Регистрация
         if (btnRegister) btnRegister.onClick.AddListener(OnRegisterClicked);
         if (btnRegisterBack) btnRegisterBack.onClick.AddListener(ShowMainMenu);
@@ -183,12 +198,29 @@ public class MenuManager : MonoBehaviour
         if (btnStatsBack)
         {
             btnStatsBack.onClick.RemoveAllListeners();
-            btnStatsBack.onClick.AddListener(ShowMainMenu);
-            Debug.Log("✅ Btn_Stats_Back настроена → ShowMainMenu");
+            btnStatsBack.onClick.AddListener(() =>
+            {
+                if (isGameRunning && databaseManager.IsLoggedIn)
+                {
+                    // Если игра запущена и пользователь вошел - возвращаемся в пользовательское меню
+                    CloseUserMenu();
+                    SetPanelActive(userMenuPanel, true);
+                }
+                else
+                {
+                    // Иначе - в главное меню
+                    ShowMainMenu();
+                }
+            });
+            Debug.Log("✅ Btn_Stats_Back настроена");
+        }
+        else
+        {
+            Debug.Log("⚠️ Btn_Stats_Back не назначена");
         }
 
-        // Кнопка "Вся статистика"
-        if (btnAllStats)
+            // Кнопка "Вся статистика"
+            if (btnAllStats)
         {
             btnAllStats.onClick.RemoveAllListeners();
             btnAllStats.onClick.AddListener(ShowAllStatsPanel);
@@ -411,6 +443,13 @@ public class MenuManager : MonoBehaviour
         SetPanelActive(helpPanel, false);
         SetPanelActive(hudPanel, false);
 
+        // === СКРЫТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.HideCrosshair();
+            Debug.Log("✅ Прицел скрыт");
+        }
+        // =======================
         ClearInputFields();
         ClearErrorMessages();
 
@@ -820,6 +859,17 @@ public class MenuManager : MonoBehaviour
 
         Time.timeScale = 1f;
 
+        // === ПОКАЗАТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.ShowCrosshair();
+            Debug.Log("✅ Прицел показан");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ crosshairUI не назначен в инспекторе!");
+        }
+        // =========================
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
@@ -887,8 +937,10 @@ public class MenuManager : MonoBehaviour
             Cursor.visible = true;
             MenuManager.IsMenuOpen = true;
 
-            SetPanelActive(mainMenuPanel, true);
-            ShowTooltip("Игра на паузе. Нажмите Esc для продолжения.");
+            SetPanelActive(mainMenuPanel, false);
+            SetPanelActive(hudPanel, false);
+            SetPanelActive(userMenuPanel, true);  // Показываем пользовательское меню
+            ShowTooltip("Игра на паузе. Нажмите \"Назад\" для продолжения.");
             OnGamePaused?.Invoke();
         }
         else
@@ -899,6 +951,7 @@ public class MenuManager : MonoBehaviour
             MenuManager.IsMenuOpen = false;
 
             SetPanelActive(mainMenuPanel, false);
+            SetPanelActive(userMenuPanel, false);  // Скрываем пользовательское меню
             SetPanelActive(hudPanel, true);
             ShowTooltip("Игра возобновлена!");
             Invoke(nameof(ClearTooltip), 2f);
@@ -1391,12 +1444,119 @@ public class MenuManager : MonoBehaviour
 #endif
     }
 
+    // === ПОЛЬЗОВАТЕЛЬСКОЕ МЕНЮ (В ИГРЕ) ===
+
+    void SaveAndExitToMainMenu()
+    {
+        Debug.Log("💾 Сохранение и выход в главное меню...");
+
+        if (isGameRunning && playerController != null && databaseManager != null && databaseManager.IsLoggedIn)
+        {
+            SaveGame();
+            Debug.Log("✅ Игра сохранена!");
+        }
+
+        // Останавливаем время
+        Time.timeScale = 0f;
+        isGameRunning = false;
+        MenuManager.IsMenuOpen = true;
+
+        // Скрываем пользовательское меню и HUD
+        SetPanelActive(userMenuPanel, false);
+        SetPanelActive(hudPanel, false);
+
+        // Показываем главное меню
+        SetPanelActive(mainMenuPanel, true);
+
+        // Показываем курсор
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        ShowTooltip("Игра сохранена. Вы в главном меню.");
+    }
+
+    void ShowUserStatsPanel()
+    {
+        Debug.Log("📊 ShowUserStatsPanel() - Статистика из пользовательского меню");
+
+        if (!databaseManager.IsLoggedIn)
+        {
+            ShowTooltip("❌ Сначала войдите в систему!");
+            return;
+        }
+
+        // Скрываем пользовательское меню
+        SetPanelActive(userMenuPanel, false);
+
+        // Показываем панель статистики
+        SetPanelActive(statisticsPanel, true);
+        ShowStatisticsMainMenu();
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        ShowTooltip("Статистика. Выберите раздел.");
+    }
+
+    void ShowUserChartsPanel()
+    {
+        Debug.Log("📈 ShowUserChartsPanel() - Графики из пользовательского меню");
+
+        if (!databaseManager.IsLoggedIn)
+        {
+            ShowTooltip("❌ Сначала войдите в систему!");
+            return;
+        }
+
+        // Скрываем пользовательское меню
+        SetPanelActive(userMenuPanel, false);
+
+        // Показываем панель графиков
+        SetPanelActive(chartsPanel, true);
+
+        // Получаем данные и строим графики
+        if (chartSystem != null)
+        {
+            chartSystem.ClearChart();
+            // Здесь можно добавить загрузку данных для графиков
+        }
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        ShowTooltip("Графики статистики. Нажмите НАЗАД для возврата.");
+    }
+
+    void CloseUserMenu()
+    {
+        Debug.Log("🔙 CloseUserMenu() - Возврат в игру");
+
+        // Скрываем пользовательское меню
+        SetPanelActive(userMenuPanel, false);
+
+        // Возвращаем управление игроку
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+        MenuManager.IsMenuOpen = false;
+
+        // Показываем HUD
+        SetPanelActive(hudPanel, true);
+
+        // Запускаем время
+        Time.timeScale = 1f;
+        isGameRunning = true;
+
+        ShowTooltip("Игра возобновлена!");
+        Invoke(nameof(ClearTooltip), 2f);
+    }
+
     // === СОБЫТИЯ БАЗЫ ДАННЫХ ===
 
     void OnDatabaseLoaded()
     {
         Debug.Log("✅ База данных загружена!");
         // НЕ запускаем игру здесь!
+
     }
 
 
@@ -1418,6 +1578,13 @@ public class MenuManager : MonoBehaviour
 
         SetPanelActive(hudPanel, false);
         SetPanelActive(mainMenuPanel, true);
+
+        // === СКРЫТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.HideCrosshair();
+        }
+        // =======================
     }
 
     // === ОЧИСТКА ===
