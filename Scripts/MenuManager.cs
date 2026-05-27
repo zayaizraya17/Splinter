@@ -153,7 +153,8 @@ public class MenuManager : MonoBehaviour
         // Скрываем ВСЕ панели кроме прелоадера
         SetPanelActive(preloaderPanel, true);      // Показываем прелоадер
         SetPanelActive(mainMenuPanel, false);      // Скрываем меню
-        SetPanelActive(registerPanel, false);
+        SetPanelActive(registerPanel, false);      // Скрываем меню регистрации
+        SetPanelActive(userMenuPanel, false);      // Скрываем пользовательское меню
         SetupHotkeys();
         SubscribeToButtons();
 
@@ -402,6 +403,9 @@ public class MenuManager : MonoBehaviour
 
         if (mainMenuPanel != null)
             SetPanelActive(mainMenuPanel, true);
+        // Скрываем пользовательское меню во время прелоадера и главного меню
+        if (userMenuPanel != null)
+            SetPanelActive(userMenuPanel, false);
 
         // Время ВСЁ ЕЩЁ остановлено
         Cursor.lockState = CursorLockMode.None;
@@ -438,6 +442,7 @@ public class MenuManager : MonoBehaviour
         SetPanelActive(mainMenuPanel, true);
         SetPanelActive(registerPanel, false);
         SetPanelActive(loginPanel, false);
+        SetPanelActive(userMenuPanel, false);  // Скрываем пользовательское меню
         SetPanelActive(statisticsPanel, false);
         SetPanelActive(aboutPanel, false);
         SetPanelActive(helpPanel, false);
@@ -877,6 +882,7 @@ public class MenuManager : MonoBehaviour
         SetPanelActive(loginPanel, false);
         SetPanelActive(registerPanel, false);
         SetPanelActive(statisticsPanel, false);
+        SetPanelActive(userMenuPanel, false);  // Скрываем пользовательское меню
 
         SetPanelActive(hudPanel, true);
 
