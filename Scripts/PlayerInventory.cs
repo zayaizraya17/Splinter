@@ -214,24 +214,11 @@ public class PlayerInventory : MonoBehaviour, ISaveable
             inventorySlots[emptySlot].SetItem(nearestPickupable.itemName);
             Debug.Log($"Подобран предмет: {nearestPickupable.itemName} в слот {emptySlot + 1} (дистанция: {nearestDistance:F2}м)");
 
-            // Если это патроны, сразу добавляем их в запас
-            if (nearestPickupable.itemName.Contains("Pistol") || nearestPickupable.itemName.Contains("pistol"))
-            {
-                AddAmmo(AmmoType.Pistol, 12);
-            }
-            else if (nearestPickupable.itemName.Contains("Shotgun") || nearestPickupable.itemName.Contains("shotgun"))
-            {
-                AddAmmo(AmmoType.Shotgun, 10);
-            }
-            // Удаляем предмет со сцены
-            Destroy(nearestPickupable.gameObject);
+            // Если это патроны, сразу добавляем их в запас и удаляем из инвентаря
 
-            PrintInventory();
-        }
-        else
-        {
-            Debug.Log($"В радиусе {pickupRadius}м нет предметов для подбора!");
-        }
+                Destroy(nearestPickupable.gameObject);
+                PrintInventory();
+            }
     }
 
     public int FindEmptySlot()
@@ -407,15 +394,25 @@ public class PlayerInventory : MonoBehaviour, ISaveable
 
     public bool HasAmmo(AmmoType type)
     {
-        switch (type)
+        // Проверяем наличие патронов нужного типа в инвентаре
+        string[] possibleNames = type == AmmoType.Pistol
+            ? new string[] { "Патроны для пистолета", "Pistol Ammo", "pistol", "Pistol" }
+            : new string[] { "Патроны для дробовика", "Shotgun Ammo", "shotgun", "Shotgun" };
+
+        foreach (var slot in inventorySlots)
         {
-            case AmmoType.Pistol:
-                return ammoData.pistolAmmo > 0;
-            case AmmoType.Shotgun:
-                return ammoData.shotgunAmmo > 0;
-            default:
-                return false;
+            if (!slot.isEmpty)
+            {
+                foreach (string name in possibleNames)
+                {
+                    if (slot.itemName.Contains(name))
+                    {
+                        return true;
+                    }
+                }
+            }
         }
+        return false;
     }
 
     public bool ConsumeAmmo(AmmoType type)
@@ -445,15 +442,27 @@ public class PlayerInventory : MonoBehaviour, ISaveable
 
     public int GetAmmoCount(AmmoType type)
     {
-        switch (type)
+        // Считаем количество патронов нужного типа в инвентаре
+        string[] possibleNames = type == AmmoType.Pistol
+            ? new string[] { "Патроны для пистолета", "Pistol Ammo", "pistol", "Pistol" }
+            : new string[] { "Патроны для дробовика", "Shotgun Ammo", "shotgun", "Shotgun" };
+
+        int count = 0;
+        foreach (var slot in inventorySlots)
         {
-            case AmmoType.Pistol:
-                return ammoData.pistolAmmo;
-            case AmmoType.Shotgun:
-                return ammoData.shotgunAmmo;
-            default:
-                return 0;
+            if (!slot.isEmpty)
+            {
+                foreach (string name in possibleNames)
+                {
+                    if (slot.itemName.Contains(name))
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
         }
+        return count;
     }
 
     public int GetMaxAmmoCapacity(AmmoType type)
@@ -478,63 +487,51 @@ public class PlayerInventory : MonoBehaviour, ISaveable
             Debug.Log("Магазин полон!");
             return;
         }
+        // Ищем патроны нужного типа в инвентаре
+        string ammoItemName = type == AmmoType.Pistol ? "Патроны для пистолета" : "Патроны для дробовика";
+        string[] possibleNames = type == AmmoType.Pistol
+            ? new string[] { "Pistol Ammo", "pistol", "Pistol" }
+            : new string[] { "Shotgun Ammo", "shotgun", "Shotgun" };
 
-        int availableAmmo = GetAmmoCount(type);
+        int totalAmmoAvailable = 0;
+        List<int> ammoSlotIndices = new List<int>();
 
-        if (availableAmmo <= 0)
+        // Находим все слоты с патронами этого типа
+        for (int i = 0; i < inventorySlots.Count; i++)
         {
-            Debug.Log("Нет патронов в запасе!");
+            if (!inventorySlots[i].isEmpty)
+            {
+                foreach (string name in possibleNames)
+                {
+                    if (inventorySlots[i].itemName.Contains(name))
+                    {
+                        ammoSlotIndices.Add(i);
+                        totalAmmoAvailable++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (totalAmmoAvailable <= 0)
+        {
+            Debug.Log("Нет патронов в инвентаре!");
             return;
         }
 
-        int ammoToReload = Mathf.Min(ammoNeeded, availableAmmo);
+        int ammoToReload = Mathf.Min(ammoNeeded, totalAmmoAvailable);
 
-        // Тратим патроны из запаса
-        switch (type)
+        // Удаляем патроны из инвентаря
+        for (int i = 0; i < ammoToReload && i < ammoSlotIndices.Count; i++)
         {
-            case AmmoType.Pistol:
-                ammoData.pistolAmmo -= ammoToReload;
-                break;
-            case AmmoType.Shotgun:
-                ammoData.shotgunAmmo -= ammoToReload;
-                break;
+            int slotIndex = ammoSlotIndices[i];
+            Debug.Log($"Удалены патроны из слота {slotIndex + 1}: {inventorySlots[slotIndex].itemName}");
+            inventorySlots[slotIndex].Clear();
         }
 
         // Заряжаем оружие
         currentAmmo += ammoToReload;
 
-        // Удаляем использованные патроны из инвентаря
-        RemoveAmmoItemsFromInventory(type, ammoToReload);
-
-        Debug.Log($"Перезарядка! Использовано патронов: {ammoToReload}, Осталось в запасе: {GetAmmoCount(type)}");
-    }
-
-
-    public void RemoveAmmoItemsFromInventory(AmmoType type, int amountUsed)
-    {
-        // Определяем ключевые слова и количество патронов в одной пачке
-        string ammoKeyword = type == AmmoType.Pistol ? "пистолет" : "дробовик";
-        int ammoPerBox = type == AmmoType.Pistol ? 12 : 10;
-
-        // Вычисляем, сколько пачек патронов было использовано
-        int boxesUsed = Mathf.CeilToInt((float)amountUsed / ammoPerBox);
-
-        Debug.Log($"Удаление патронов из инвентаря: тип={type}, использовано патронов={amountUsed}, пачек к удалению={boxesUsed}");
-
-        // Проходим по всем слотам и удаляем предметы с патронами
-        for (int i = inventorySlots.Count - 1; i >= 0; i--)
-        {
-            if (boxesUsed <= 0) break;
-
-            if (!inventorySlots[i].isEmpty &&
-                (inventorySlots[i].itemName.Contains("Патроны") && inventorySlots[i].itemName.ToLower().Contains(ammoKeyword)))
-            {
-                inventorySlots[i].Clear();
-                boxesUsed--;
-                Debug.Log($"Удален предмет с патронами из слота {i + 1}");
-            }
-        }
-
-        PrintInventory();
+        Debug.Log($"Перезарядка! Использовано патронов: {ammoToReload}, Осталось в инвентаре: {GetAmmoCount(type)}");
     }
 }
