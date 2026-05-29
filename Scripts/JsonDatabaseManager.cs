@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -506,6 +506,30 @@ public class JsonDatabaseManager : MonoBehaviour
         SaveAllData();
         Debug.Log("✅ Позиция игрока сохранена в JSON!");
     }
+
+    public SaveData LoadPlayerProgress()
+    {
+        if (!IsLoggedIn || CurrentUser == null)
+        {
+            Debug.LogWarning("⚠️ LoadPlayerProgress(): Пользователь не вошёл!");
+            return null;
+        }
+
+        // Находим последнее сохранение игрока
+        var save = saves.FirstOrDefault(s => s.UserId == CurrentUser.Id && s.SaveName == "AutoSave_LastPosition");
+
+        if (save != null)
+        {
+            Debug.Log($"✅ Найдено сохранение для пользователя {CurrentUser.Login}");
+            return save;
+        }
+        else
+        {
+            Debug.Log("⚠️ Нет сохранённых данных для этого пользователя");
+            return null;
+        }
+    }
+
     public void UpdatePlayTime(int userId, float playTime)
     {
         var stats = statistics.FirstOrDefault(s => s.UserId == userId);
