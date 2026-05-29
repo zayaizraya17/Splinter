@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
@@ -15,6 +16,8 @@ public class SaveData
     public int ShotgunAmmo;
     public float PlayTime;  // ← ДОБАВИТЬ ЭТУ СТРОКУ
     public string LastPlayed;
+    public List<string> InventoryItems;  // Список предметов в инвентаре
+    
 
 
     // Вспомогательные свойства для удобной работы с позицией и ротацией
@@ -50,5 +53,6 @@ public class SaveData
     public SaveData()
     {
         Id = UnityEngine.Random.Range(10000, 99999);
+        InventoryItems = new List<string>();
     }
 }
