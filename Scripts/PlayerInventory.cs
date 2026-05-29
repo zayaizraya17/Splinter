@@ -7,14 +7,7 @@ public enum AmmoType
     Shotgun
 }
 
-[System.Serializable]
-public class AmmoData
-{
-    public int pistolAmmo = 0;
-    public int shotgunAmmo = 0;
-    public int maxPistolAmmoCapacity = 50;
-    public int maxShotgunAmmoCapacity = 30;
-}
+
 [System.Serializable]
 public class InventorySlot
 {
@@ -173,40 +166,61 @@ public class PlayerInventory : MonoBehaviour, ISaveable
 
     public void PickupItem()
     {
-        // Проверяем, есть ли предмет перед игроком для подбора
-        RaycastHit hit;
-        if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out hit, 3f))
-        {
-            PickupableItem pickupable = hit.transform.GetComponent<PickupableItem>();
+        // Ищем все предметы в радиусе подбора вокруг игрока
+        float pickupRadius = 3f; // Радиус доступности для подбора
 
+        // Используем позицию CharacterController для более точного определения центра игрока
+        CharacterController controller = GetComponent<CharacterController>();
+        Vector3 checkPosition = controller != null ? transform.position + Vector3.up * controller.height / 2 : transform.position;
+
+        Collider[] hitColliders = Physics.OverlapSphere(checkPosition, pickupRadius);
+
+        Debug.Log($"Проверка подбора предметов в радиусе {pickupRadius}м. Найдено коллайдеров: {hitColliders.Length}");
+
+        PickupableItem nearestPickupable = null;
+        float nearestDistance = float.MaxValue;
+
+        foreach (var collider in hitColliders)
+        {
+            Debug.Log($"Найден коллайдер: {collider.gameObject.name}, Layer: {collider.gameObject.layer}");
+
+            PickupableItem pickupable = collider.GetComponent<PickupableItem>();
             if (pickupable != null)
             {
-                // Находим первый пустой слот
-                int emptySlot = FindEmptySlot();
+                float distance = Vector3.Distance(transform.position, collider.transform.position);
+                Debug.Log($"Предмет найден: {pickupable.itemName}, дистанция: {distance:F2}м");
 
-                if (emptySlot == -1)
+                if (distance < nearestDistance)
                 {
-                    Debug.Log("Инвентарь полон! Нет свободных слотов.");
-                    return;
+                    nearestDistance = distance;
+                    nearestPickupable = pickupable;
                 }
-
-                // Подбираем предмет
-                inventorySlots[emptySlot].SetItem(pickupable.itemName);
-                Debug.Log($"Подобран предмет: {pickupable.itemName} в слот {emptySlot + 1}");
-
-                // Удаляем предмет со сцены
-                Destroy(hit.transform.gameObject);
-
-                PrintInventory();
             }
-            else
+        }
+
+        if (nearestPickupable != null)
+        {
+            // Находим первый пустой слот
+            int emptySlot = FindEmptySlot();
+
+            if (emptySlot == -1)
             {
-                Debug.Log("Перед игроком нет предмета для подбора!");
+                Debug.Log("Инвентарь полон! Нет свободных слотов.");
+                return;
             }
+
+            // Подбираем предмет
+            inventorySlots[emptySlot].SetItem(nearestPickupable.itemName);
+            Debug.Log($"Подобран предмет: {nearestPickupable.itemName} в слот {emptySlot + 1} (дистанция: {nearestDistance:F2}м)");
+
+            // Удаляем предмет со сцены
+            Destroy(nearestPickupable.gameObject);
+
+            PrintInventory();
         }
         else
         {
-            Debug.Log("Перед игроком ничего нет!");
+            Debug.Log($"В радиусе {pickupRadius}м нет предметов для подбора!");
         }
     }
 
@@ -355,7 +369,6 @@ public class PlayerInventory : MonoBehaviour, ISaveable
             Debug.Log("PlayerInventory: Нет сохранённых данных, используем значения по умолчанию.");
         }
     }
-
     public void AddAmmo(AmmoType type, int amount)
     {
         switch (type)
