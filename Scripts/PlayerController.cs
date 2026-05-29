@@ -106,7 +106,6 @@ public class PlayerController : MonoBehaviour
         if (wantsToRun && canRun && (x != 0 || z != 0))
         {
             currentStamina -= staminaCostRun * Time.deltaTime;
-            Debug.Log($"Стамина: {currentStamina:F1}"); // Для отладки
         }
         else if (currentStamina < maxStamina)
         {
