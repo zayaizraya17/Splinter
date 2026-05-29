@@ -8,6 +8,18 @@ using UnityEngine;
 [Serializable]
 public class AmmoData
 {
+    // Патроны для пистолета
+    public int pistolAmmo = 0;
+
+    // Патроны для дробовика
+    public int shotgunAmmo = 0;
+
+    // Максимальное количество патронов для пистолета
+    public int maxPistolAmmoCapacity = 50;
+
+    // Максимальное количество патронов для дробовика
+    public int maxShotgunAmmoCapacity = 30;
+
     // Тип патронов (например, "9mm", "12gauge", "5.56")
     public string ammoType;
 
