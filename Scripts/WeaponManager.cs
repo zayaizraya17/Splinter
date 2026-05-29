@@ -531,4 +531,27 @@ public class WeaponManager : MonoBehaviour
             default: return 0;
         }
     }
+
+    // Методы для переключения оружия из инвентаря
+    public void SwitchToWeapon(string weaponName)
+    {
+        for (int i = 0; i < weaponNames.Length; i++)
+        {
+            if (weaponNames[i] == weaponName)
+            {
+                currentWeaponIndex = i;
+                Debug.Log($"Переключено на оружие: {weaponNames[currentWeaponIndex]}");
+                return;
+            }
+        }
+
+        // Если оружие не найдено, переключаемся на руки
+        SwitchToHand();
+    }
+
+    public void SwitchToHand()
+    {
+        currentWeaponIndex = 3; // Индекс "Удар рукой"
+        Debug.Log("Переключено на руки");
+    }
 }
