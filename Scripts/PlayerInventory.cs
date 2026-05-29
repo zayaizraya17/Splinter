@@ -1,5 +1,6 @@
-﻿using UnityEngine;
-
+using UnityEngine;
+using System;
+using System.Collections.Generic;
 public enum AmmoType
 {
     Pistol,
@@ -14,17 +15,345 @@ public class AmmoData
     public int maxPistolAmmoCapacity = 50;
     public int maxShotgunAmmoCapacity = 30;
 }
+[System.Serializable]
+public class InventorySlot
+{
+    public string itemName;
+    public bool isEmpty => string.IsNullOrEmpty(itemName);
 
-public class PlayerInventory : MonoBehaviour
+    public void Clear()
+    {
+        itemName = "";
+    }
+
+    public void SetItem(string name)
+    {
+        itemName = name;
+    }
+}
+
+public class PlayerInventory : MonoBehaviour, ISaveable
 {
     [Header("Патроны")]
     public AmmoData ammoData = new AmmoData();
 
+    [Header("Слоты инвентаря (6 слотов)")]
+    public List<InventorySlot> inventorySlots = new List<InventorySlot>();
+
+    [Header("Текущий выбранный слот")]
+    public int currentSlotIndex = -1; // -1 означает "ничего в руках"
+
+    [Header("Ссылки")]
+    public WeaponManager weaponManager;
+    public JsonDatabaseManager databaseManager;
+
+    // Стартовые предметы
     void Start()
     {
+        // Инициализируем 6 слотов
+        if (inventorySlots == null || inventorySlots.Count != 6)
+        {
+            inventorySlots = new List<InventorySlot>();
+            for (int i = 0; i < 6; i++)
+            {
+                inventorySlots.Add(new InventorySlot());
+            }
+        }
+
+        // Даем стартовое оружие (Пистолет в слот 1, Нож в слот 2)
+        if (inventorySlots[0].isEmpty)
+            inventorySlots[0].SetItem("Пистолет");
+        if (inventorySlots[1].isEmpty)
+            inventorySlots[1].SetItem("Нож");
+        if (inventorySlots[2].isEmpty)
+            inventorySlots[2].SetItem("Дробовик");
+
         // Инициализация стартовых патронов (опционально)
         // ammoData.pistolAmmo = 12;
         // ammoData.shotgunAmmo = 10;
+
+        // Находим ссылки
+        if (weaponManager == null)
+            weaponManager = GetComponentInParent<WeaponManager>();
+
+        if (databaseManager == null)
+            databaseManager = FindObjectOfType<JsonDatabaseManager>();
+
+        Debug.Log($"Инвентарь инициализирован! Слоты: {inventorySlots.Count}");
+        PrintInventory();
+    }
+
+    void Update()
+    {
+        // Переключение между слотами цифрами 1-6
+        for (int i = 1; i <= 6; i++)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha0 + i) || Input.GetKeyDown((KeyCode)(KeyCode.Keypad1 + i - 1)))
+            {
+                SelectSlot(i - 1);
+            }
+        }
+
+        // Выбросить предмет (Q) - только если предмет в руках
+        if (Input.GetKeyDown(KeyCode.Q) && currentSlotIndex >= 0 && currentSlotIndex < inventorySlots.Count)
+        {
+            DropCurrentItem();
+        }
+
+        // Подобрать предмет (R)
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            PickupItem();
+        }
+    }
+
+    public void SelectSlot(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= inventorySlots.Count)
+        {
+            Debug.Log($"Неверный индекс слота: {slotIndex}");
+            return;
+        }
+
+        currentSlotIndex = slotIndex;
+        InventorySlot slot = inventorySlots[slotIndex];
+
+        if (slot.isEmpty)
+        {
+            Debug.Log($"Слот {slotIndex + 1}: Пусто");
+            // Можно переключиться на "руки" или ничего
+            if (weaponManager != null)
+            {
+                weaponManager.SwitchToHand();
+            }
+        }
+        else
+        {
+            Debug.Log($"Слот {slotIndex + 1}: {slot.itemName}");
+            if (weaponManager != null)
+            {
+                weaponManager.SwitchToWeapon(slot.itemName);
+            }
+        }
+    }
+
+    public void DropCurrentItem()
+    {
+        if (currentSlotIndex < 0 || currentSlotIndex >= inventorySlots.Count)
+        {
+            Debug.Log("Нечего выбрасывать!");
+            return;
+        }
+
+        InventorySlot slot = inventorySlots[currentSlotIndex];
+
+        if (slot.isEmpty)
+        {
+            Debug.Log("В руках пусто!");
+            return;
+        }
+
+        string droppedItem = slot.itemName;
+        slot.Clear();
+        currentSlotIndex = -1;
+
+        Debug.Log($"Выброшен предмет: {droppedItem}");
+
+        // Здесь можно создать префаб предмета на земле
+        // SpawnItemOnGround(droppedItem, transform.position);
+
+        PrintInventory();
+
+        // Переключаемся на руки
+        if (weaponManager != null)
+        {
+            weaponManager.SwitchToHand();
+        }
+    }
+
+    public void PickupItem()
+    {
+        // Проверяем, есть ли предмет перед игроком для подбора
+        RaycastHit hit;
+        if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out hit, 3f))
+        {
+            PickupableItem pickupable = hit.transform.GetComponent<PickupableItem>();
+
+            if (pickupable != null)
+            {
+                // Находим первый пустой слот
+                int emptySlot = FindEmptySlot();
+
+                if (emptySlot == -1)
+                {
+                    Debug.Log("Инвентарь полон! Нет свободных слотов.");
+                    return;
+                }
+
+                // Подбираем предмет
+                inventorySlots[emptySlot].SetItem(pickupable.itemName);
+                Debug.Log($"Подобран предмет: {pickupable.itemName} в слот {emptySlot + 1}");
+
+                // Удаляем предмет со сцены
+                Destroy(hit.transform.gameObject);
+
+                PrintInventory();
+            }
+            else
+            {
+                Debug.Log("Перед игроком нет предмета для подбора!");
+            }
+        }
+        else
+        {
+            Debug.Log("Перед игроком ничего нет!");
+        }
+    }
+
+    public int FindEmptySlot()
+    {
+        for (int i = 0; i < inventorySlots.Count; i++)
+        {
+            if (inventorySlots[i].isEmpty)
+            {
+                return i;
+            }
+        }
+        return -1; // Нет пустых слотов
+    }
+
+    public bool HasItem(string itemName)
+    {
+        foreach (var slot in inventorySlots)
+        {
+            if (slot.itemName == itemName)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void AddItem(string itemName)
+    {
+        int emptySlot = FindEmptySlot();
+
+        if (emptySlot == -1)
+        {
+            Debug.Log("Инвентарь полон!");
+            return;
+        }
+
+        inventorySlots[emptySlot].SetItem(itemName);
+        Debug.Log($"Добавлен предмет: {itemName} в слот {emptySlot + 1}");
+        PrintInventory();
+    }
+
+    public void RemoveItem(string itemName)
+    {
+        foreach (var slot in inventorySlots)
+        {
+            if (slot.itemName == itemName)
+            {
+                slot.Clear();
+                Debug.Log($"Удален предмет: {itemName}");
+                PrintInventory();
+                return;
+            }
+        }
+        Debug.Log($"Предмет {itemName} не найден в инвентаре!");
+    }
+
+    public string GetCurrentItem()
+    {
+        if (currentSlotIndex < 0 || currentSlotIndex >= inventorySlots.Count)
+        {
+            return "";
+        }
+
+        return inventorySlots[currentSlotIndex].itemName;
+    }
+
+    void PrintInventory()
+    {
+        string inventoryStr = "Инвентарь: ";
+        for (int i = 0; i < inventorySlots.Count; i++)
+        {
+            if (i == currentSlotIndex)
+                inventoryStr += $"[{i + 1}:{(inventorySlots[i].isEmpty ? "Пусто" : inventorySlots[i].itemName)}] ";
+            else
+                inventoryStr += $"{i + 1}:{(inventorySlots[i].isEmpty ? "Пусто" : inventorySlots[i].itemName)} ";
+        }
+        Debug.Log(inventoryStr);
+    }
+
+    // === Методы для сохранения/загрузки ===
+
+    public void SaveData()
+    {
+        if (databaseManager == null || !databaseManager.IsLoggedIn)
+        {
+            Debug.LogWarning("PlayerInventory: Нельзя сохранить - пользователь не вошёл!");
+            return;
+        }
+
+        SaveData saveData = new SaveData();
+
+        // Сохраняем патроны
+        saveData.PistolAmmo = ammoData.pistolAmmo;
+        saveData.ShotgunAmmo = ammoData.shotgunAmmo;
+
+        // Сохраняем инвентарь
+        saveData.InventoryItems = new List<string>();
+        foreach (var slot in inventorySlots)
+        {
+            saveData.InventoryItems.Add(slot.itemName ?? "");
+        }
+
+        databaseManager.SavePlayerProgress(saveData);
+        Debug.Log("PlayerInventory: Данные сохранены!");
+    }
+
+    public void LoadData()
+    {
+        if (databaseManager == null || !databaseManager.IsLoggedIn)
+        {
+            Debug.LogWarning("PlayerInventory: Нельзя загрузить - пользователь не вошёл!");
+            return;
+        }
+
+        SaveData loadedSave = databaseManager.LoadPlayerProgress();
+
+        if (loadedSave != null)
+        {
+            // Загружаем патроны
+            ammoData.pistolAmmo = loadedSave.PistolAmmo;
+            ammoData.shotgunAmmo = loadedSave.ShotgunAmmo;
+
+            // Загружаем инвентарь
+            if (loadedSave.InventoryItems != null && loadedSave.InventoryItems.Count > 0)
+            {
+                for (int i = 0; i < Math.Min(inventorySlots.Count, loadedSave.InventoryItems.Count); i++)
+                {
+                    string itemName = loadedSave.InventoryItems[i];
+                    if (!string.IsNullOrEmpty(itemName))
+                    {
+                        inventorySlots[i].SetItem(itemName);
+                    }
+                    else
+                    {
+                        inventorySlots[i].Clear();
+                    }
+                }
+            }
+
+            Debug.Log("PlayerInventory: Данные загружены!");
+            PrintInventory();
+        }
+        else
+        {
+            Debug.Log("PlayerInventory: Нет сохранённых данных, используем значения по умолчанию.");
+        }
     }
 
     public void AddAmmo(AmmoType type, int amount)
