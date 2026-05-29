@@ -20,9 +20,23 @@ public class PickupableItem : MonoBehaviour
         // Если имя не задано, используем имя объекта
         if (string.IsNullOrEmpty(itemName))
         {
-            itemName = gameObject.name;
+            itemName = gameObject.name.Replace("(Clone)", "").Trim();
         }
+
+        // Добавляем BoxCollider если его нет
+        Collider col = GetComponent<Collider>();
+        if (col == null)
+        {
+            col = gameObject.AddComponent<BoxCollider>();
+        }
+
+        // Убеждаемся, что коллайдер включен и является триггером для лучшего обнаружения
+        col.isTrigger = true;
+        col.enabled = true;
+
+        Debug.Log($"Предмет '{itemName}' инициализирован с коллайдером {col.GetType().Name}");
     }
+
 
     void Update()
     {
