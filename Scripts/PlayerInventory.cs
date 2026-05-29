@@ -198,9 +198,10 @@ public class PlayerInventory : MonoBehaviour, ISaveable
             }
         }
 
+
         if (nearestPickupable != null)
         {
-            // Находим первый пустой слот
+            // Находим первый пустой слот для всех предметов (включая патроны)
             int emptySlot = FindEmptySlot();
 
             if (emptySlot == -1)
@@ -209,10 +210,19 @@ public class PlayerInventory : MonoBehaviour, ISaveable
                 return;
             }
 
-            // Подбираем предмет
+            // Подбираем предмет (патроны тоже занимают слот до перезарядки)
             inventorySlots[emptySlot].SetItem(nearestPickupable.itemName);
             Debug.Log($"Подобран предмет: {nearestPickupable.itemName} в слот {emptySlot + 1} (дистанция: {nearestDistance:F2}м)");
 
+            // Если это патроны, сразу добавляем их в запас
+            if (nearestPickupable.itemName.Contains("Pistol") || nearestPickupable.itemName.Contains("pistol"))
+            {
+                AddAmmo(AmmoType.Pistol, 12);
+            }
+            else if (nearestPickupable.itemName.Contains("Shotgun") || nearestPickupable.itemName.Contains("shotgun"))
+            {
+                AddAmmo(AmmoType.Shotgun, 10);
+            }
             // Удаляем предмет со сцены
             Destroy(nearestPickupable.gameObject);
 
@@ -493,6 +503,38 @@ public class PlayerInventory : MonoBehaviour, ISaveable
         // Заряжаем оружие
         currentAmmo += ammoToReload;
 
+        // Удаляем использованные патроны из инвентаря
+        RemoveAmmoItemsFromInventory(type, ammoToReload);
+
         Debug.Log($"Перезарядка! Использовано патронов: {ammoToReload}, Осталось в запасе: {GetAmmoCount(type)}");
+    }
+
+
+    public void RemoveAmmoItemsFromInventory(AmmoType type, int amountUsed)
+    {
+        // Определяем ключевые слова и количество патронов в одной пачке
+        string ammoKeyword = type == AmmoType.Pistol ? "пистолет" : "дробовик";
+        int ammoPerBox = type == AmmoType.Pistol ? 12 : 10;
+
+        // Вычисляем, сколько пачек патронов было использовано
+        int boxesUsed = Mathf.CeilToInt((float)amountUsed / ammoPerBox);
+
+        Debug.Log($"Удаление патронов из инвентаря: тип={type}, использовано патронов={amountUsed}, пачек к удалению={boxesUsed}");
+
+        // Проходим по всем слотам и удаляем предметы с патронами
+        for (int i = inventorySlots.Count - 1; i >= 0; i--)
+        {
+            if (boxesUsed <= 0) break;
+
+            if (!inventorySlots[i].isEmpty &&
+                (inventorySlots[i].itemName.Contains("Патроны") && inventorySlots[i].itemName.ToLower().Contains(ammoKeyword)))
+            {
+                inventorySlots[i].Clear();
+                boxesUsed--;
+                Debug.Log($"Удален предмет с патронами из слота {i + 1}");
+            }
+        }
+
+        PrintInventory();
     }
 }
