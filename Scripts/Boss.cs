@@ -1,27 +1,32 @@
 using UnityEngine;
 
+[RequireComponent(typeof(CharacterController))]
 public class Boss : MonoBehaviour
 {
     [Header("Характеристики Босса")]
     public int maxHealth = 500;
     public int currentHealth;
-    public float speed = 1.5f;
+    public float speed = 3.5f;
 
     [Header("Атаки Босса")]
-    public int meleeDamage = 30;        // Урон ближней атаки
-    public int heavyDamage = 50;        // Урон мощной атаки
-    public int rangedDamage = 25;       // Урон дальнобойной атаки
-    public float meleeRange = 3f;       // Радиус ближней атаки
-    public float rangedRange = 20f;     // Дальность дальнобойной атаки
+    public int meleeDamage = 30;
+    public int heavyDamage = 50;
+    public int rangedDamage = 25;
+    public float meleeRange = 3.5f;
+    public float rangedRange = 20f;
 
     [Header("Тайминги атак")]
-    public float meleeCooldown = 2f;    // Кулдаун ближней атаки
-    public float heavyCooldown = 5f;    // Кулдаун мощной атаки
-    public float rangedCooldown = 3f;   // Кулдаун дальнобойной атаки
+    public float meleeCooldown = 2f;
+    public float heavyCooldown = 5f;
+    public float rangedCooldown = 3f;
 
     private float meleeNextAttackTime = 0f;
     private float heavyNextAttackTime = 0f;
     private float rangedNextAttackTime = 0f;
+
+    [Header("Дистанции для атак")]
+    public float meleeFollowDistance = 2.5f;
+    public float rangedRetreatDistance = 12f;
 
     public enum BossState { Idle, Chase, AttackMelee, AttackHeavy, AttackRanged }
 
@@ -31,19 +36,25 @@ public class Boss : MonoBehaviour
     private Transform player;
     private bool isDead = false;
     private float detectionRange = 15f;
-    private float attackRange = 5f;
     private Vector3 lastKnownPosition;
     private bool isChasing = false;
 
+    private CharacterController controller;
+
     [Header("Эффекты")]
-    public GameObject rangedProjectilePrefab;  // Префаб снаряда для дальнобойной атаки
-    public Transform projectileSpawnPoint;     // Точка spawns снаряда
+    public GameObject rangedProjectilePrefab;
+    public Transform projectileSpawnPoint;
 
     void Start()
     {
         currentHealth = maxHealth;
+        controller = GetComponent<CharacterController>();
 
-        // Ищем игрока
+        if (controller == null)
+        {
+            Debug.LogError("На Боссе отсутствует CharacterController!");
+        }
+
         GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject != null)
         {
@@ -52,10 +63,9 @@ public class Boss : MonoBehaviour
         }
         else
         {
-            Debug.LogError("Босс НЕ нашёл игрока! Проверь тег Player!");
+            Debug.LogWarning("Босс НЕ нашёл игрока при старте! Проверь тег Player.");
         }
 
-        // Если нет точки spawns для снаряда, создаём её
         if (projectileSpawnPoint == null)
         {
             GameObject spawnObj = new GameObject("ProjectileSpawnPoint");
@@ -67,47 +77,109 @@ public class Boss : MonoBehaviour
 
     void Update()
     {
-        if (Time.timeScale == 0 || isDead) return;
+        if (Time.timeScale == 0 || isDead || player == null) return;
 
-        if (player != null)
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        bool canSeePlayer = CheckLineOfSight(player.position);
+
+        if (canSeePlayer && distanceToPlayer <= detectionRange)
         {
-            float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-            bool canSeePlayer = CheckLineOfSight(player.position);
+            lastKnownPosition = player.position;
+            isChasing = true;
 
-            // Логика обнаружения игрока
-            if (canSeePlayer && distanceToPlayer <= detectionRange)
+            if (distanceToPlayer <= meleeRange)
             {
-                lastKnownPosition = player.position;
-                isChasing = true;
-                currentState = BossState.Chase;
-
-                // Выбор атаки в зависимости от дистанции
-                if (distanceToPlayer <= meleeRange)
+                if (distanceToPlayer > meleeFollowDistance)
                 {
-                    // Ближняя атака или мощная атака
-                    TryPerformAttack(distanceToPlayer);
-                }
-                else if (distanceToPlayer <= rangedRange)
-                {
-                    // Дальнобойная атака
-                    TryPerformRangedAttack();
+                    MoveTowardsPlayer(distanceToPlayer);
+                    currentState = BossState.Chase;
                 }
                 else
                 {
-                    // Приближаемся к игроку
-                    ChasePlayer();
+                    LookAtPlayer();
+                    currentState = BossState.AttackMelee;
                 }
+                TryPerformAttack(distanceToPlayer);
             }
-            else if (isChasing)
+            else if (distanceToPlayer <= rangedRange)
             {
-                // Игрок потерян из виду, идём к последней известной позиции
-                MoveToLastKnownPosition();
+                if (distanceToPlayer < rangedRetreatDistance)
+                {
+                    MoveAwayFromPlayer(distanceToPlayer);
+                    currentState = BossState.Chase;
+                }
+                else if (distanceToPlayer > rangedRetreatDistance + 2f)
+                {
+                    MoveTowardsPlayer(distanceToPlayer);
+                    currentState = BossState.Chase;
+                }
+                else
+                {
+                    LookAtPlayer();
+                    currentState = BossState.AttackRanged;
+                }
+                TryPerformRangedAttack();
             }
             else
             {
-                currentState = BossState.Idle;
+                MoveTowardsPlayer(distanceToPlayer);
+                currentState = BossState.Chase;
             }
         }
+        else if (isChasing)
+        {
+            MoveToLastKnownPosition();
+        }
+        else
+        {
+            currentState = BossState.Idle;
+        }
+    }
+
+    void MoveTowardsPlayer(float distance)
+    {
+        if (player == null || controller == null) return;
+
+        Vector3 direction = (player.position - transform.position).normalized;
+        direction.y = 0;
+
+        if (!Physics.Raycast(transform.position, direction, 1.5f))
+        {
+            controller.Move(direction * speed * Time.deltaTime);
+            LookAtPlayer();
+        }
+        else
+        {
+            Vector3 rightDir = Vector3.Cross(direction, Vector3.up).normalized;
+            controller.Move(rightDir * speed * 0.5f * Time.deltaTime);
+        }
+    }
+
+    void MoveAwayFromPlayer(float distance)
+    {
+        if (player == null || controller == null) return;
+
+        Vector3 direction = (transform.position - player.position).normalized;
+        direction.y = 0;
+
+        if (!Physics.Raycast(transform.position, direction, 1.5f))
+        {
+            controller.Move(direction * speed * Time.deltaTime);
+            LookAtPlayer();
+        }
+        else
+        {
+            Vector3 rightDir = Vector3.Cross(direction, Vector3.up).normalized;
+            controller.Move(rightDir * speed * 0.5f * Time.deltaTime);
+            LookAtPlayer();
+        }
+    }
+
+    void LookAtPlayer()
+    {
+        if (player == null) return;
+        Vector3 lookPos = new Vector3(player.position.x, transform.position.y, player.position.z);
+        transform.LookAt(lookPos);
     }
 
     bool CheckLineOfSight(Vector3 targetPosition)
@@ -116,58 +188,30 @@ public class Boss : MonoBehaviour
         Vector3 direction = (targetPosition - transform.position).normalized;
         float distance = Vector3.Distance(transform.position, targetPosition);
 
-        if (Physics.Raycast(transform.position, direction, out hit, distance))
+        // Маска слоя игрока или просто проверка по тегу внутри хита
+        if (Physics.Raycast(transform.position + Vector3.up * 1f, direction, out hit, distance))
         {
-            if (hit.transform != player)
+            if (hit.transform.CompareTag("Player") || hit.transform.IsChildOf(player))
             {
-                return false;
+                return true;
             }
+            Debug.DrawLine(transform.position + Vector3.up * 1f, hit.point, Color.red, 0.1f);
+            return false;
         }
         return true;
     }
 
-    void ChasePlayer()
-    {
-        if (player == null) return;
-
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
-        if (distanceToPlayer > attackRange)
-        {
-            Vector3 direction = (player.position - transform.position).normalized;
-            direction.y = 0;
-
-            // Проверяем, нет ли стены на пути
-            Vector3 movePosition = transform.position + direction * speed * Time.deltaTime;
-            if (!Physics.CheckSphere(movePosition, 0.5f))
-            {
-                transform.position = movePosition;
-            }
-
-
-            Vector3 lookPos = new Vector3(player.position.x, transform.position.y, player.position.z);
-            transform.LookAt(lookPos);
-
-            currentState = BossState.Chase;
-        }
-    }
-
     void MoveToLastKnownPosition()
     {
+        if (controller == null) return;
+
         float distanceToLastPos = Vector3.Distance(transform.position, lastKnownPosition);
 
         if (distanceToLastPos > 1f)
         {
             Vector3 direction = (lastKnownPosition - transform.position).normalized;
             direction.y = 0;
-
-            // Проверяем, нет ли стены на пути
-            Vector3 movePosition = transform.position + direction * speed * Time.deltaTime;
-            if (!Physics.CheckSphere(movePosition, 0.5f))
-            {
-                transform.position = movePosition;
-            }
-
+            controller.Move(direction * speed * Time.deltaTime);
             Vector3 lookPos = new Vector3(lastKnownPosition.x, transform.position.y, lastKnownPosition.z);
             transform.LookAt(lookPos);
         }
@@ -175,7 +219,6 @@ public class Boss : MonoBehaviour
         {
             isChasing = false;
             currentState = BossState.Idle;
-            Debug.Log("Босс потерял игрока и вернулся в патрулирование");
         }
     }
 
@@ -183,7 +226,6 @@ public class Boss : MonoBehaviour
     {
         float currentTime = Time.time;
 
-        // Приоритет атак: мощная -> ближняя
         if (currentTime >= heavyNextAttackTime && Random.value < 0.3f)
         {
             PerformHeavyAttack();
@@ -197,7 +239,6 @@ public class Boss : MonoBehaviour
     void TryPerformRangedAttack()
     {
         float currentTime = Time.time;
-
         if (currentTime >= rangedNextAttackTime)
         {
             PerformRangedAttack();
@@ -211,19 +252,16 @@ public class Boss : MonoBehaviour
         Debug.Log("БОСС: Ближняя атака!");
         currentState = BossState.AttackMelee;
 
-        // Проверяем попадание
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
-        if (distanceToPlayer <= meleeRange)
+        if (distanceToPlayer <= meleeRange * 1.2f)
         {
             PlayerController playerCtrl = player.GetComponent<PlayerController>();
             if (playerCtrl != null)
             {
                 playerCtrl.TakeDamage(meleeDamage);
-                Debug.Log($"Босс нанёс {meleeDamage} урона игроку (ближняя атака)!");
+                Debug.Log($"Босс нанёс {meleeDamage} урона (ближняя)!");
             }
         }
-
         meleeNextAttackTime = Time.time + meleeCooldown;
     }
 
@@ -234,27 +272,17 @@ public class Boss : MonoBehaviour
         Debug.Log("БОСС: МОЩНАЯ АТАКА!");
         currentState = BossState.AttackHeavy;
 
-        // Мощная атака имеет больший радиус
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
-        if (distanceToPlayer <= meleeRange * 1.5f)
+        if (distanceToPlayer <= meleeRange * 1.8f)
         {
             PlayerController playerCtrl = player.GetComponent<PlayerController>();
             if (playerCtrl != null)
             {
                 playerCtrl.TakeDamage(heavyDamage);
-                Debug.Log($"Босс нанёс {heavyDamage} урона игроку (мощная атака)!");
-
-                // Эффект отбрасывания
-                Vector3 knockbackDirection = (player.position - transform.position).normalized;
-                CharacterController playerCC = player.GetComponent<CharacterController>();
-                if (playerCC != null)
-                {
-                    playerCC.Move(knockbackDirection * 5f);
-                }
+                Debug.Log($"Босс нанёс {heavyDamage} урона (мощная)!");
             }
         }
-
         heavyNextAttackTime = Time.time + heavyCooldown;
     }
 
@@ -265,7 +293,6 @@ public class Boss : MonoBehaviour
         Debug.Log("БОСС: Дальнобойная атака!");
         currentState = BossState.AttackRanged;
 
-        // Создаём снаряд
         if (rangedProjectilePrefab != null)
         {
             GameObject projectile = Instantiate(rangedProjectilePrefab, projectileSpawnPoint.position, Quaternion.identity);
@@ -277,66 +304,54 @@ public class Boss : MonoBehaviour
             }
             else
             {
-                // Если нет скрипта снаряда, просто двигаем его к игроку
                 StartCoroutine(MoveProjectileToPlayer(projectile));
             }
         }
         else
         {
-            // Альтернатива: мгновенная атака лучом
             RaycastHit hit;
             Vector3 direction = (player.position - transform.position).normalized;
-
-            if (Physics.Raycast(transform.position, direction, out hit, rangedRange))
+            if (Physics.Raycast(transform.position + Vector3.up * 1.5f, direction, out hit, rangedRange))
             {
-                if (hit.transform == player)
+                if (hit.transform.CompareTag("Player") || hit.transform.IsChildOf(player))
                 {
                     PlayerController playerCtrl = player.GetComponent<PlayerController>();
-                    if (playerCtrl != null)
-                    {
-                        playerCtrl.TakeDamage(rangedDamage);
-                        Debug.Log($"Босс нанёс {rangedDamage} урона игроку (дальнобойная атака)!");
-                    }
+                    if (playerCtrl != null) playerCtrl.TakeDamage(rangedDamage);
                 }
             }
         }
-
         rangedNextAttackTime = Time.time + rangedCooldown;
     }
 
     System.Collections.IEnumerator MoveProjectileToPlayer(GameObject projectile)
     {
-        float speed = 10f;
+        float projSpeed = 10f;
         while (projectile != null && player != null)
         {
             Vector3 direction = (player.position - projectile.transform.position).normalized;
-            projectile.transform.position += direction * speed * Time.deltaTime;
+            projectile.transform.position += direction * projSpeed * Time.deltaTime;
+            projectile.transform.LookAt(player.position);
 
-            // Проверяем расстояние до игрока
             if (Vector3.Distance(projectile.transform.position, player.position) < 1f)
             {
                 PlayerController playerCtrl = player.GetComponent<PlayerController>();
-                if (playerCtrl != null)
-                {
-                    playerCtrl.TakeDamage(rangedDamage);
-                    Debug.Log($"Босс нанёс {rangedDamage} урона игроку (снаряд)!");
-                }
+                if (playerCtrl != null) playerCtrl.TakeDamage(rangedDamage);
                 Destroy(projectile);
                 break;
             }
-
             yield return null;
         }
     }
 
+ 
     public void TakeDamage(float damage, GameObject damageSource)
     {
         currentHealth -= (int)damage;
-        Debug.Log($"Босс получил урон: {damage}. Здоровье: {currentHealth}/{maxHealth}");
 
         if (currentHealth <= 0)
         {
             Die();
+
         }
     }
 
@@ -345,17 +360,13 @@ public class Boss : MonoBehaviour
         isDead = true;
         Debug.Log("БОСС ПОГИБ!");
 
-        // Обновляем статистику убийства
+        // Находим игрока для статистики
         GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject != null)
         {
             EffectManager effects = playerObject.GetComponent<EffectManager>();
-            if (effects != null)
-            {
-                effects.RegisterKill();
-            }
+            if (effects != null) effects.RegisterKill();
 
-            // Обновляем статистику в базе данных
             JsonDatabaseManager dbManager = FindFirstObjectByType<JsonDatabaseManager>();
             if (dbManager != null && dbManager.IsLoggedIn)
             {
@@ -363,33 +374,29 @@ public class Boss : MonoBehaviour
             }
         }
 
-        // Эффект смерти (можно добавить частицы, звук и т.д.)
-        Debug.Log("=== БОСС ПОВЕРЖЕН! ===");
+        // Отключаем коллайдеры и физику, чтобы босс не падал сквозь пол или не бился
+        CharacterController cc = GetComponent<CharacterController>();
+        if (cc) cc.enabled = false;
 
         Destroy(gameObject, 3f);
     }
 
     void OnDrawGizmosSelected()
     {
-        // Радиус обнаружения
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
-
-        // Радиус атаки
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
-
-        // Радиус ближней атаки
         Gizmos.color = Color.orange;
         Gizmos.DrawWireSphere(transform.position, meleeRange);
-
-        // Радиус дальнобойной атаки
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, rangedRange);
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, meleeFollowDistance);
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, rangedRetreatDistance);
     }
 }
 
-// Скрипт для снаряда дальнобойной атаки
+// Скрипт снаряда
 public class RangedProjectile : MonoBehaviour
 {
     private Transform target;
@@ -410,24 +417,28 @@ public class RangedProjectile : MonoBehaviour
         {
             Vector3 direction = (target.position - transform.position).normalized;
             transform.position += direction * speed * Time.deltaTime;
-
-            // Поворачиваем снаряд по направлению движения
             transform.LookAt(target.position);
         }
         else
         {
-            // Если цель потеряна, летим вперёд
             transform.position += transform.forward * speed * Time.deltaTime;
         }
 
-        // Проверяем столкновение с игроком
         if (target != null && Vector3.Distance(transform.position, target.position) < 1f)
         {
             PlayerController playerCtrl = target.GetComponent<PlayerController>();
-            if (playerCtrl != null)
-            {
-                playerCtrl.TakeDamage(damage);
-            }
+            if (playerCtrl != null) playerCtrl.TakeDamage(damage);
+            Destroy(gameObject);
+        }
+    }
+
+    // Добавляем обработку столкновений для снаряда, если он пролетит мимо цели но врежется в босса (на всякий случай)
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Player"))
+        {
+            PlayerController playerCtrl = other.GetComponent<PlayerController>();
+            if (playerCtrl != null) playerCtrl.TakeDamage(damage);
             Destroy(gameObject);
         }
     }

@@ -219,5 +219,4 @@ public class ChartSystem : MonoBehaviour
     {
         ClearChart();
     }
-
 }

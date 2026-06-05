@@ -7,6 +7,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+
 public class MenuManager : MonoBehaviour
 {
     public static bool IsMenuOpen { get; private set; } = true;
@@ -22,6 +23,7 @@ public class MenuManager : MonoBehaviour
     public GameObject aboutPanel;
     public GameObject helpPanel;
     public GameObject chartPanel;
+
 
     [Header("Главное меню")]
     public Button btnNewGame;
@@ -95,7 +97,7 @@ public class MenuManager : MonoBehaviour
     public JsonDatabaseManager databaseManager;
     public PlayerController playerController;
     public WeaponManager weaponManager;
-
+    public CrosshairUI crosshairUI;
 
     // Состояние
     private bool isGameRunning = false;
@@ -411,6 +413,13 @@ public class MenuManager : MonoBehaviour
         SetPanelActive(helpPanel, false);
         SetPanelActive(hudPanel, false);
 
+        // === СКРЫТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.HideCrosshair();
+            Debug.Log("✅ Прицел скрыт");
+        }
+        // =======================
         ClearInputFields();
         ClearErrorMessages();
 
@@ -820,6 +829,17 @@ public class MenuManager : MonoBehaviour
 
         Time.timeScale = 1f;
 
+        // === ПОКАЗАТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.ShowCrosshair();
+            Debug.Log("✅ Прицел показан");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ crosshairUI не назначен в инспекторе!");
+        }
+        // =========================
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
@@ -1397,6 +1417,7 @@ public class MenuManager : MonoBehaviour
     {
         Debug.Log("✅ База данных загружена!");
         // НЕ запускаем игру здесь!
+
     }
 
 
@@ -1418,6 +1439,13 @@ public class MenuManager : MonoBehaviour
 
         SetPanelActive(hudPanel, false);
         SetPanelActive(mainMenuPanel, true);
+
+        // === СКРЫТЬ ПРИЦЕЛ ===
+        if (crosshairUI != null)
+        {
+            crosshairUI.HideCrosshair();
+        }
+        // =======================
     }
 
     // === ОЧИСТКА ===
